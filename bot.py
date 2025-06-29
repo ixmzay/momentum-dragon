@@ -10,7 +10,7 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 app = Flask(__name__)
 
 def send_telegram(msg):
-    print("Preparing to send Telegram message...")  # Force it to show in logs
+    print("Preparing to send Telegram message...")
     try:
         token = os.getenv("TELEGRAM_TOKEN")
         chat_id = os.getenv("TELEGRAM_CHAT_ID")
@@ -25,19 +25,22 @@ def send_telegram(msg):
         print("Error sending Telegram message:", e)
 
 
-
 def fetch_yahoo_headlines():
     resp = requests.get("https://finance.yahoo.com/")
     soup = BeautifulSoup(resp.text, "html.parser")
     return [a.get_text() for a in soup.select("h3 a[href^='/news/']")[:5]]
 
 def analyze_and_alert():
-    for h in fetch_yahoo_headlines():
+    print("🔍 Running analyze_and_alert...")  # Debug
+    headlines = fetch_yahoo_headlines()
+    print(f"📰 Fetched {len(headlines)} headlines")
+    for h in headlines:
         polarity = TextBlob(h).sentiment.polarity
         sentiment = "Bullish" if polarity > 0.1 else "Bearish" if polarity < -0.1 else "Neutral"
-        msg = f"🚨 [NEWS ALERT]\n📰 {h}\n🧠 Sentiment: {sentiment}\n🕒 {time.strftime('%Y‑%m‑%d %H:%M:%S')}"
-        send_telegram(msg)
+        print(f"📊 Headline: {h} | Sentiment: {sentiment}")
+        send_telegram(f"🚨 [NEWS ALERT]\n📰 {h}\n🧠 Sentiment: {sentiment}")
         time.sleep(1)
+
 
 @app.route("/schedule")
 def schedule():
