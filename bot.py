@@ -11,7 +11,10 @@ app = Flask(__name__)
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+    res = requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+    print("Telegram status:", res.status_code)
+    print("Response:", res.text)
+
 
 def fetch_yahoo_headlines():
     resp = requests.get("https://finance.yahoo.com/")
