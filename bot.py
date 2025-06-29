@@ -10,10 +10,20 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 app = Flask(__name__)
 
 def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    res = requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-    print("Telegram status:", res.status_code)
-    print("Response:", res.text)
+    print("Preparing to send Telegram message...")  # Force it to show in logs
+    try:
+        token = os.getenv("TELEGRAM_TOKEN")
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        print("Token loaded:", bool(token))
+        print("Chat ID loaded:", bool(chat_id))
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        res = requests.post(url, data={"chat_id": chat_id, "text": msg})
+        print("Message:", msg)
+        print("Status:", res.status_code)
+        print("Response:", res.text)
+    except Exception as e:
+        print("Error sending Telegram message:", e)
+
 
 
 def fetch_yahoo_headlines():
