@@ -225,4 +225,62 @@ def fetch_benzinga_news():
         params = {
             "items": 50,
             "tickers": tickers,
-            "token":
+            "token": BENZINGA_API_KEY
+        }
+        try:
+            resp = requests.get(BENZINGA_URL, params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            news = data.get("news", [])
+            print(f"📡 Fetched {len(news)} Benzinga news for chunk: {tickers}")
+            all_news.extend(news)
+        except Exception as e:
+            print(f"❌ Benzinga API error for chunk: {tickers} — {e}")
+
+    return all_news
+
+def analyze_benzinga_news():
+    print("🚨 Running analyze_benzinga_news()")
+    news_list = fetch_benzinga_news()
+
+    for article in news_list:
+        title = article.get("title", "").strip()
+        if not title or title in sent_news:
+            print(f"⚠️ Duplicate or empty Benzinga news skipped: {title}")
+            continue
+
+        ticker = match_watchlist(title)
+        if not ticker:
+            continue
+
+        sentiment = analyze_sentiment(title)
+        print(f"📊 Benzinga Sentiment Score: {sentiment:.2f}")
+
+        if sentiment > SENTIMENT_THRESHOLD:
+            direction = "Bullish"
+        elif sentiment < -SENTIMENT_THRESHOLD:
+            direction = "Bearish"
+        else:
+            print("⚠️ Neutral Benzinga sentiment — skipping alert")
+            continue
+
+        confidence_score, confidence_label = calculate_confidence(title)
+        if confidence_label == "Low":
+            print("⚠️ Low Benzinga confidence — skipping alert")
+            continue
+
+        message = (
+            f"*{direction} News on {ticker}:*\n"
+            f"{title}\n\n"
+            f"_Confidence:_ {confidence_score}% ({confidence_label})"
+        )
+
+        send_to_telegram(message)
+        sent_news.add(title)
+        SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
+
+    print("✅ Done scanning Benzinga news.\n")
+
+if __name__ == "__main__":
+    analyze_news()          # Yahoo RSS feed
+    analyze_benzinga_news() # Benzinga API feed
