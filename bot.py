@@ -8,6 +8,8 @@ TELEGRAM_TOKEN = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
 TELEGRAM_CHAT_ID = "5528794335"  # your personal chat ID or group ID
 
 RSS_URL = "https://finance.yahoo.com/rss/topstories"
+BENZINGA_API_KEY = "bz.XAO6BCTUMYPFGHXXL7SJ3ZU4IRRTFRE7"
+BENZINGA_URL = "https://api.benzinga.com/api/v2/news"
 
 WATCHLIST = {
     "AAPL": ["AAPL", "Apple"],
@@ -99,8 +101,9 @@ WATCHLIST = {
 
 SENTIMENT_THRESHOLD = 0.1
 SENT_LOG_PATH = Path("sent_titles.txt")
+
 if SENT_LOG_PATH.exists():
-    sent_news = set(SENT_LOG_PATH.read_text().splitlines())
+    sent_news = set(SENT_LOG_PATH.read_text(encoding="utf-8").splitlines())
 else:
     sent_news = set()
 
@@ -197,16 +200,76 @@ def analyze_news():
             continue
 
         message = (
-    f"*{direction} News on {ticker}:*\n"
-    f"{title}\n\n"
-    f"_Confidence:_ {confidence_score}% ({confidence_label})"
-)
+            f"*{direction} News on {ticker}:*\n"
+            f"{title}\n\n"
+            f"_Confidence:_ {confidence_score}% ({confidence_label})"
+        )
 
         send_to_telegram(message)
         sent_news.add(title)
-        SENT_LOG_PATH.write_text("\n".join(sent_news))
+        SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
 
-    print("✅ Done scanning news.\n")
+    print("✅ Done scanning Yahoo RSS news.\n")
+
+def fetch_benzinga_news():
+    headers = {
+        "Authorization": f"Bearer {BENZINGA_API_KEY}",
+    }
+    params = {
+        "items": 50,
+        "tickers": ",".join(WATCHLIST.keys()),
+    }
+    try:
+        resp = requests.get(BENZINGA_URL, headers=headers, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("news", [])
+    except Exception as e:
+        print(f"❌ Benzinga API error: {e}")
+        return []
+
+def analyze_benzinga_news():
+    print("🚨 Running analyze_benzinga_news()")
+    news_list = fetch_benzinga_news()
+
+    for article in news_list:
+        title = article.get("title", "").strip()
+        if not title or title in sent_news:
+            print(f"⚠️ Duplicate or empty Benzinga news skipped: {title}")
+            continue
+
+        ticker = match_watchlist(title)
+        if not ticker:
+            continue
+
+        sentiment = analyze_sentiment(title)
+        print(f"📊 Benzinga Sentiment Score: {sentiment:.2f}")
+
+        if sentiment > SENTIMENT_THRESHOLD:
+            direction = "Bullish"
+        elif sentiment < -SENTIMENT_THRESHOLD:
+            direction = "Bearish"
+        else:
+            print("⚠️ Neutral Benzinga sentiment — skipping alert")
+            continue
+
+        confidence_score, confidence_label = calculate_confidence(title)
+        if confidence_label == "Low":
+            print("⚠️ Low Benzinga confidence — skipping alert")
+            continue
+
+        message = (
+            f"*{direction} News on {ticker}:*\n"
+            f"{title}\n\n"
+            f"_Confidence:_ {confidence_score}% ({confidence_label})"
+        )
+
+        send_to_telegram(message)
+        sent_news.add(title)
+        SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
+
+    print("✅ Done scanning Benzinga news.\n")
 
 if __name__ == "__main__":
-    analyze_news()
+    analyze_news()          # Yahoo RSS feed
+    analyze_benzinga_news() # Benzinga API feed
