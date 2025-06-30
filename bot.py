@@ -4,7 +4,7 @@ from textblob import TextBlob
 
 # === HARDCODED CREDENTIALS ===
 TELEGRAM_TOKEN = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
-TELEGRAM_CHAT_ID = "-1002580715831"  # your personal chat ID or group ID
+TELEGRAM_CHAT_ID = "5528794335"  # your personal chat ID or group ID
 
 RSS_URL = "https://finance.yahoo.com/rss/topstories"
 
@@ -140,6 +140,7 @@ def send_to_telegram(message):
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
         "parse_mode": "Markdown"
+print(f"📨 Sending to chat_id: {TELEGRAM_CHAT_ID}")        
     }
     try:
         r = requests.post(url, json=payload)
