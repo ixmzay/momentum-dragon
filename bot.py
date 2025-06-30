@@ -4,7 +4,7 @@ from textblob import TextBlob
 
 # === HARDCODED CREDENTIALS ===
 TELEGRAM_TOKEN = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
-TELEGRAM_CHAT_ID = "5528794335"  # your personal chat ID or group ID
+TELEGRAM_CHAT_ID = "-1002580715831"  # your personal chat ID or group ID
 
 RSS_URL = "https://finance.yahoo.com/rss/topstories"
 
@@ -96,8 +96,43 @@ WATCHLIST = {
     "QCOM": ["QCOM", "Qualcomm"],
 }
 
-
 SENTIMENT_THRESHOLD = 0.1
+
+# Track sent news titles to avoid duplicates during runtime
+sent_news = set()
+
+def calculate_confidence(headline):
+    headline_lower = headline.lower()
+
+    strong_words = [
+        "upgrade", "upgraded", "downgrade", "downgraded", "raise", "raised", "cut", "cuts",
+        "record", "beat", "beats", "miss", "misses", "warn", "warning", "surge", "surges",
+        "fall", "falls", "breakout", "breakouts", "outperform", "outperforming",
+        "accelerate", "accelerated", "accelerating", "beat consensus", "cut guidance",
+        "miss estimates", "beat estimates"
+    ]
+
+    moderate_words = [
+        "gain", "gains", "growth", "growing", "buy", "buying", "strong", "positive", "profit", "profits",
+        "expansion", "increase", "increased", "increases", "decline", "declines", "weak", "weakness",
+        "loss", "losses", "drop", "drops", "lower", "lowered", "lowering", "sell", "selling",
+        "rebound", "rebounded", "margin expansion", "pullback", "pulled back"
+    ]
+
+    strong_hits = sum(phrase in headline_lower for phrase in strong_words)
+    moderate_hits = sum(phrase in headline_lower for phrase in moderate_words)
+
+    score = min(100, strong_hits * 25 + moderate_hits * 10)
+
+    if score >= 70:
+        confidence_label = "High"
+    elif score >= 30:
+        confidence_label = "Medium"
+    else:
+        confidence_label = "Low"
+
+    return score, confidence_label
+
 
 def send_to_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -131,7 +166,12 @@ def analyze_news():
     print(f"📥 Pulled {len(feed.entries)} RSS entries")
 
     for entry in feed.entries:
-        title = entry.title
+        title = entry.title.strip()
+
+        if title in sent_news:
+            print(f"⚠️ Duplicate news skipped: {title}")
+            continue
+
         print(f"🔍 Checking title: {title}")
 
         ticker = match_watchlist(title)
@@ -149,8 +189,18 @@ def analyze_news():
             print("⚠️ Neutral sentiment — skipping alert")
             continue
 
-        message = f"*{direction} News on {ticker}:*\n{title}"
+        confidence_score, confidence_label = calculate_confidence(title)
+        if confidence_label == "Low":
+            print("⚠️ Low confidence — skipping alert")
+            continue
+
+        message = (
+            f"*{direction} News on {ticker}:*\n"
+            f"{title}\n\n"
+            f"_Confidence:_ {confidence_score}% ({confidence_label})"
+        )
         send_to_telegram(message)
+        sent_news.add(title)
 
     print("✅ Done scanning news.\n")
 
