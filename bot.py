@@ -139,8 +139,7 @@ def send_to_telegram(message):
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
-        "parse_mode": "Markdown"
-print(f"📨 Sending to chat_id: {TELEGRAM_CHAT_ID}")        
+        "parse_mode": "Markdown"        
     }
     try:
         r = requests.post(url, json=payload)
