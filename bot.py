@@ -1,3 +1,7 @@
+from pathlib import Path
+
+# Original script with cleaned and merged fixes from user's instructions
+final_script = """
 import requests
 import feedparser
 from textblob import TextBlob
@@ -202,7 +206,14 @@ def analyze_news():
         send_to_telegram(message)
         sent_news.add(title)
 
-    print("✅ Done scanning news.\n")
+    print("✅ Done scanning news.\\n")
 
 if __name__ == "__main__":
     analyze_news()
+"""
+
+# Save it to file
+output_path = Path("/mnt/data/final_bot_script.py")
+output_path.write_text(final_script.strip())
+
+output_path.name
