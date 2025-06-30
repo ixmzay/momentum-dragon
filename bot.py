@@ -1,82 +1,84 @@
-from flask import Flask
 import requests
 import feedparser
-from datetime import datetime
-import pytz
+from textblob import TextBlob
 
-app = Flask(__name__)
+# === HARDCODED CREDENTIALS ===
+TELEGRAM_TOKEN = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
+TELEGRAM_CHAT_ID = "5528794335"  # your personal chat ID or group ID
 
-# === CONFIG ===
-TELEGRAM_TOKEN = "<7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M>"
-TELEGRAM_CHAT_ID = "<-1002580715831>"
-RSS_FEED_URL = "https://finance.yahoo.com/rss/topstories"
-WATCHLIST = ["TSLA", "QQQ", "SPY", "NVDA", "AAPL"]
-KEYWORDS_BULLISH = ["beats", "surges", "record", "deal", "acquires", "raises", "rips", "expands", "invests"]
-CONFIDENCE_THRESHOLD = 50
+RSS_URL = "https://finance.yahoo.com/rss/topstories"
 
-# === TELEGRAM SEND ===
+WATCHLIST = {
+    "TSLA": ["TSLA", "Tesla"],
+    "AAPL": ["AAPL", "Apple"],
+    "NVDA": ["NVDA", "NVIDIA"],
+    "QQQ": ["QQQ"],
+    "SPY": ["SPY"],
+    "CRCL": ["CRCL", "Circle", "Circle Internet"],
+    "PLTR": ["PLTR", "Palantir"],
+    "COIN": ["COIN", "Coinbase"],
+    "HOOD": ["HOOD", "Robinhood"],
+    "CIRCL": ["CIRCL", "Circle"],
+    "WMT": ["WMT", "Walmart"],
+    "COST": ["COST", "Costco"]
+}
+
+SENTIMENT_THRESHOLD = 0.1
+
 def send_to_telegram(message):
-    print("📨 Telegram Payload:", message)
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-    response = requests.post(url, json=payload)
-    print("✅ Telegram Response:", response.json())
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        r = requests.post(url, json=payload)
+        print(f"✅ Telegram sent! Status: {r.status_code}")
+    except Exception as e:
+        print(f"❌ Telegram error: {e}")
 
-# === WATCHLIST MATCH ===
 def match_watchlist(text):
-    for ticker in WATCHLIST:
-        if ticker.lower() in text.lower():
-            return ticker
+    text_lower = text.lower()
+    for ticker, keywords in WATCHLIST.items():
+        for keyword in keywords:
+            if keyword.lower() in text_lower:
+                print(f"✅ Matched {ticker} via keyword '{keyword}' in: {text}")
+                return ticker
+    print(f"❌ No match found in: {text}")
     return None
 
-# === SENTIMENT SCORE ===
-def score_sentiment(text):
-    score = 0
-    for keyword in KEYWORDS_BULLISH:
-        if keyword.lower() in text.lower():
-            score += 15
-    return min(score, 100)
+def analyze_sentiment(text):
+    return TextBlob(text).sentiment.polarity
 
-# === MAIN LOGIC ===
 def analyze_news():
-    print("🚨 analyze_news() IS RUNNING")
-    feed = feedparser.parse(RSS_FEED_URL)
-    print(f"✅ Pulled {len(feed.entries)} entries from RSS")
+    print("🚨 Running analyze_news()")
+    feed = feedparser.parse(RSS_URL)
+    print(f"📥 Pulled {len(feed.entries)} RSS entries")
 
     for entry in feed.entries:
         title = entry.title
-        link = entry.link
         print(f"🔍 Checking title: {title}")
 
-        matched_ticker = match_watchlist(title)
-        if matched_ticker:
-            print(f"🎯 Matched ticker: {matched_ticker}")
-            score = score_sentiment(title)
-            print(f"📊 Sentiment score: {score}")
+        ticker = match_watchlist(title)
+        if not ticker:
+            continue
 
-            if score >= CONFIDENCE_THRESHOLD:
-                message = f"\ud83d\udcca News Momentum Alert - ${matched_ticker}\n"
-                message += f"Sentiment: {'Bullish' if score > 55 else 'Bearish'} | Confidence: {score}%\n"
-                message += f"Headline: {title}\n"
-                message += f"\ud83d\udd17 {link}"
-                print("📤 Sending alert to Telegram...")
-                send_to_telegram(message)
-                break
+        sentiment = analyze_sentiment(title)
+        print(f"📊 Sentiment Score: {sentiment:.2f}")
+
+        if sentiment > SENTIMENT_THRESHOLD:
+            direction = "Bullish"
+        elif sentiment < -SENTIMENT_THRESHOLD:
+            direction = "Bearish"
         else:
-            print("❌ No ticker match")
+            print("⚠️ Neutral sentiment — skipping alert")
+            continue
 
-# === ROUTES ===
-@app.route('/')
-def home():
-    return "ZayMoveBot v2 is alive!"
+        message = f"*{direction} News on {ticker}:*\n{title}"
+        send_to_telegram(message)
 
-@app.route('/schedule')
-def schedule():
-    print("🔥 SCHEDULE ENDPOINT HIT — ANALYZE_NEWS STARTING")
+    print("✅ Done scanning news.\n")
+
+if __name__ == "__main__":
     analyze_news()
-    print("✅ analyze_news() finished running")
-    return "OK"
-
-# === MAIN ===
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=10000)
