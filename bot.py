@@ -7,8 +7,8 @@ import pytz
 app = Flask(__name__)
 
 # === CONFIG ===
-TELEGRAM_TOKEN = "<your_token_here>"
-TELEGRAM_CHAT_ID = "<your_chat_id_here>"
+TELEGRAM_TOKEN = "<7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M>"
+TELEGRAM_CHAT_ID = "<-1002580715831>"
 RSS_FEED_URL = "https://finance.yahoo.com/rss/topstories"
 WATCHLIST = ["TSLA", "QQQ", "SPY", "NVDA", "AAPL"]
 KEYWORDS_BULLISH = ["beats", "surges", "record", "deal", "acquires", "raises", "rips", "expands", "invests"]
