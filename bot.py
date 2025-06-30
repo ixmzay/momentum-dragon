@@ -1,10 +1,7 @@
-from pathlib import Path
-
-# Original script with cleaned and merged fixes from user's instructions
-final_script = """
 import requests
 import feedparser
 from textblob import TextBlob
+from pathlib import Path
 
 # === HARDCODED CREDENTIALS ===
 TELEGRAM_TOKEN = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
@@ -101,9 +98,11 @@ WATCHLIST = {
 }
 
 SENTIMENT_THRESHOLD = 0.1
-
-# Track sent news titles to avoid duplicates during runtime
-sent_news = set()
+SENT_LOG_PATH = Path("sent_titles.txt")
+if SENT_LOG_PATH.exists():
+    sent_news = set(SENT_LOG_PATH.read_text().splitlines())
+else:
+    sent_news = set()
 
 def calculate_confidence(headline):
     headline_lower = headline.lower()
@@ -136,7 +135,6 @@ def calculate_confidence(headline):
         confidence_label = "Low"
 
     return score, confidence_label
-
 
 def send_to_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -199,21 +197,18 @@ def analyze_news():
             continue
 
         message = (
-            f"*{direction} News on {ticker}:*\n"
-            f"{title}\n\n"
+            f"*{direction} News on {ticker}:*
+"
+            f"{title}
+
+"
             f"_Confidence:_ {confidence_score}% ({confidence_label})"
         )
         send_to_telegram(message)
         sent_news.add(title)
+        SENT_LOG_PATH.write_text("\n".join(sent_news))
 
-    print("✅ Done scanning news.\\n")
+    print("✅ Done scanning news.\n")
 
 if __name__ == "__main__":
     analyze_news()
-"""
-
-# Save it to file
-output_path = Path("/mnt/data/final_bot_script.py")
-output_path.write_text(final_script.strip())
-
-output_path.name
