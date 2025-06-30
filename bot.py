@@ -197,13 +197,11 @@ def analyze_news():
             continue
 
         message = (
-            f"*{direction} News on {ticker}:*
-"
-            f"{title}
+    f"*{direction} News on {ticker}:*\n"
+    f"{title}\n\n"
+    f"_Confidence:_ {confidence_score}% ({confidence_label})"
+)
 
-"
-            f"_Confidence:_ {confidence_score}% ({confidence_label})"
-        )
         send_to_telegram(message)
         sent_news.add(title)
         SENT_LOG_PATH.write_text("\n".join(sent_news))
