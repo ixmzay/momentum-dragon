@@ -1,7 +1,4 @@
 flask
 requests
-beautifulsoup4
-textblob
-python-dotenv
-pytz
 feedparser
+pytz
