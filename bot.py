@@ -247,4 +247,5 @@ def process_benzinga_article(article):
 
 
 def analyze_benzinga():
-    print("📡 Scanning Benzinga...
+    print("📡 Scanning Benzinga...")
+
