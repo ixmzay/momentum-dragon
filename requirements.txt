@@ -3,3 +3,5 @@ requests
 textblob
 transformers
 torch
+scikit-learn
+pandas
