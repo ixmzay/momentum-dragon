@@ -120,7 +120,9 @@ def get_vix_level():
 def send_to_telegram(message: str):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
     try:
-        requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", json=payload, timeout=5)
+        resp = requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", json=payload, timeout=5)
+        print("Telegram response:", resp.status_code, resp.text)
+        resp.raise_for_status()
         print("✅ Telegram alert sent.")
     except Exception as e:
         print(f"❌ Telegram error: {e}")
@@ -150,8 +152,10 @@ def analyze_sentiment(text: str) -> float:
     probs = F.softmax(outputs.logits, dim=1).detach().numpy()[0]
     return probs[2] - probs[0]  # pos - neg
 
-def should_send_alert(title, ticker):
-    return title not in sent_news and not is_rate_limited(ticker)
+def should_send_alert(title, ticker, conf_score=None):
+    if title in sent_news or is_rate_limited(ticker):
+        return False
+    return True
 
 def send_alert(title, ticker, sentiment, conf_score, conf_label, source):
     vix_val, vix_lbl = get_vix_level()
@@ -176,8 +180,9 @@ def send_alert(title, ticker, sentiment, conf_score, conf_label, source):
 # === Yahoo RSS ===
 def process_yahoo_entry(entry):
     title = entry.get("title", "").strip()
-    if not title: return
+    print("▶️ Yahoo headline:", title)
     ticker = match_watchlist(title)
+    print("   → matched ticker:", ticker)
     if not ticker: return
     sentiment = analyze_sentiment(title)
     conf_score, conf_label = calculate_confidence(title)
@@ -207,8 +212,9 @@ def fetch_benzinga(chunk):
 
 def process_benzinga_article(article):
     title = article.get("title", "").strip()
-    if not title: return
+    print("▶️ Benzinga headline:", title)
     ticker = match_watchlist(title)
+    print("   → matched ticker:", ticker)
     if not ticker: return
     sentiment = analyze_sentiment(title)
     conf_score, conf_label = calculate_confidence(title)
