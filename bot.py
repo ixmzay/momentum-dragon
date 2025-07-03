@@ -38,7 +38,89 @@ TRAINING_DATA_PATH  = Path("training_data.json")
 # === WATCHLIST ===
 WATCHLIST = {
     "AAPL": ["AAPL", "Apple"],
-    # … include all your tickers here …
+    "MSFT": ["MSFT", "Microsoft"],
+    "GOOGL": ["GOOGL", "Google", "Alphabet"],
+    "AMZN": ["AMZN", "Amazon"],
+    "META": ["META", "Facebook", "Meta"],
+    "TSLA": ["TSLA", "Tesla"],
+    "NVDA": ["NVDA", "NVIDIA"],
+    "AMD": ["AMD", "Advanced Micro Devices"],
+    "INTC": ["INTC", "Intel"],
+    "NFLX": ["NFLX", "Netflix"],
+    "SPY": ["SPY", "S&P 500"],
+    "QQQ": ["QQQ", "Nasdaq"],
+    "IWM": ["IWM", "Russell 2000"],
+    "XOM": ["XOM", "Exxon", "ExxonMobil"],
+    "CVX": ["CVX", "Chevron"],
+    "OXY": ["OXY", "Occidental"],
+    "WMT": ["WMT", "Walmart"],
+    "COST": ["COST", "Costco"],
+    "TGT": ["TGT", "Target"],
+    "HD": ["HD", "Home Depot"],
+    "LOW": ["LOW", "Lowe's"],
+    "JPM": ["JPM", "JPMorgan"],
+    "BAC": ["BAC", "Bank of America"],
+    "GS": ["GS", "Goldman Sachs"],
+    "MS": ["MS", "Morgan Stanley"],
+    "WFC": ["WFC", "Wells Fargo"],
+    "BX": ["BX", "Blackstone"],
+    "UBER": ["UBER"],
+    "LYFT": ["LYFT"],
+    "SNOW": ["SNOW", "Snowflake"],
+    "PLTR": ["PLTR", "Palantir"],
+    "CRM": ["CRM", "Salesforce"],
+    "ADBE": ["ADBE", "Adobe"],
+    "SHOP": ["SHOP", "Shopify"],
+    "PYPL": ["PYPL", "PayPal"],
+    "SQ": ["SQ", "Block"],
+    "COIN": ["COIN", "Coinbase"],
+    "ROKU": ["ROKU"],
+    "BABA": ["BABA", "Alibaba"],
+    "JD": ["JD", "JD.com"],
+    "NIO": ["NIO"],
+    "LI": ["LI", "Li Auto"],
+    "XPEV": ["XPEV", "XPeng"],
+    "LMT": ["LMT", "Lockheed Martin"],
+    "NOC": ["NOC", "Northrop Grumman"],
+    "RTX": ["RTX", "Raytheon"],
+    "BA": ["BA", "Boeing"],
+    "GE": ["GE", "General Electric"],
+    "CAT": ["CAT", "Caterpillar"],
+    "DE": ["DE", "John Deere"],
+    "F": ["F", "Ford"],
+    "GM": ["GM", "General Motors"],
+    "RIVN": ["RIVN", "Rivian"],
+    "LCID": ["LCID", "Lucid"],
+    "PFE": ["PFE", "Pfizer"],
+    "MRNA": ["MRNA", "Moderna"],
+    "JNJ": ["JNJ", "Johnson & Johnson"],
+    "BMY": ["BMY", "Bristol Myers"],
+    "UNH": ["UNH", "UnitedHealth"],
+    "MDT": ["MDT", "Medtronic"],
+    "ABBV": ["ABBV", "AbbVie"],
+    "TMO": ["TMO", "Thermo Fisher"],
+    "SHEL": ["SHEL", "Shell"],
+    "BP": ["BP", "British Petroleum"],
+    "UL": ["UL", "Unilever"],
+    "BTI": ["BTI", "British American Tobacco"],
+    "SAN": ["SAN", "Santander"],
+    "DB": ["DB", "Deutsche Bank"],
+    "VTOL": ["VTOL", "Bristow Group"],
+    "EVTL": ["EVTL", "Vertical Aerospace"],
+    "EH": ["EH", "EHang"],
+    "PL": ["PL", "Planet Labs"],
+    "TT": ["TT", "Trane"],
+    "JCI": ["JCI", "Johnson Controls"],
+    "RDW": ["RDW", "Redwire"],
+    "LOAR": ["LOAR", "Loar Holdings"],
+    "PANW": ["PANW", "Palo Alto Networks"],
+    "CRWD": ["CRWD", "CrowdStrike"],
+    "NET": ["NET", "Cloudflare"],
+    "ZS": ["ZS", "Zscaler"],
+    "TSM": ["TSM", "Taiwan Semiconductor"],
+    "AVGO": ["AVGO", "Broadcom"],
+    "MU": ["MU", "Micron"],
+    "TXN": ["TXN", "Texas Instruments"],
     "QCOM": ["QCOM", "Qualcomm"]
 }
 
@@ -116,6 +198,14 @@ def analyze_sentiment(text: str) -> float:
     probs   = F.softmax(outputs.logits, dim=1).detach().numpy()[0]
     return probs[2] - probs[0]
 
+def get_sentiment_label(score: float) -> str:
+    if score > 0.05:
+        return "Bullish"
+    elif score < -0.05:
+        return "Bearish"
+    else:
+        return "Neutral"
+
 def get_vix_level():
     try:
         hist   = yf.Ticker("^VIX").history(period="1d", interval="1m")
@@ -135,7 +225,7 @@ def send_to_telegram(message: str):
     try:
         resp = requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", json=payload, timeout=5)
         resp.raise_for_status()
-        print(f"✅ Telegram: {resp.status_code}")
+        print(f"✅ Telegram sent: {resp.status_code}")
     except Exception as e:
         print(f"❌ Telegram error: {e}")
 
@@ -160,20 +250,21 @@ def match_watchlist(text: str) -> str | None:
 def should_send_alert(title: str, ticker: str, conf_score: int) -> bool:
     if title in sent_news or is_rate_limited(ticker):
         return False
-    # For unmatched tickers, only alert if high enough confidence
     if ticker == "GENERAL" and conf_score < CONFIDENCE_THRESHOLD:
         return False
     return True
 
 
 def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_label: str, source: str):
-    vix_val, vix_lbl      = get_vix_level()
-    ml_pred, ml_conf      = classify_text(title)
-    timestamp             = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    sentiment_label = get_sentiment_label(sentiment)
+    vix_val, vix_lbl = get_vix_level()
+    ml_pred, ml_conf = classify_text(title)
+    timestamp       = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     msg = (
         f"🗞 *{source} Alert*\n"
         f"*{ticker}* — {title}\n"
-        f"📊 Sent: `{sentiment:.2f}`  🎯 Conf: *{conf_score}%* ({conf_label})"
+        f"📈 Sentiment: *{sentiment_label}* (`{sentiment:.2f}`)\n"
+        f"🎯 Confidence: *{conf_score}%* ({conf_label})"
     )
     if ml_pred:
         msg += f"\n🤖 ML: *{ml_pred}* ({ml_conf}%)"
@@ -187,11 +278,17 @@ def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_
 def process_yahoo_entry(entry):
     title = entry.get("title", "").strip()
     print("▶️ Yahoo headline:", title)
+
     ticker = match_watchlist(title) or "GENERAL"
     conf_score, conf_label = calculate_confidence(title)
+    print(f"   → ticker: {ticker}  │ conf_score: {conf_score}% ({conf_label})")
+
     if should_send_alert(title, ticker, conf_score):
+        print("   → passing filters, sending alert")
         sentiment = analyze_sentiment(title)
         send_alert(title, ticker, sentiment, conf_score, conf_label, "Yahoo")
+    else:
+        print("   → filtered out, not sending")
 
 def analyze_yahoo():
     print("📡 Scanning Yahoo RSS...")
@@ -210,7 +307,6 @@ def fetch_benzinga(chunk):
         print(f"❌ Benzinga error: {e}")
         return []
 
-
 def process_benzinga_article(article):
     title = article.get("title", "").strip()
     print("▶️ Benzinga headline:", title)
@@ -219,7 +315,6 @@ def process_benzinga_article(article):
     if should_send_alert(title, ticker, conf_score):
         sentiment = analyze_sentiment(title)
         send_alert(title, ticker, sentiment, conf_score, conf_label, "Benzinga")
-
 
 def analyze_benzinga():
     print("📡 Scanning Benzinga...")
