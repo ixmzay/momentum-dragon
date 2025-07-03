@@ -284,15 +284,19 @@ def match_watchlist(text: str) -> str:
 
 def calculate_confidence(headline: str) -> (int, str):
     hl = headline.lower()
-    hi = sum(w in hl for w in CRITICAL_KEYWORDS
-)    st = sum(w in hl for w in STRONG_KEYWORDS)
+    hi = sum(w in hl for w in CRITICAL_KEYWORDS)
+    st = sum(w in hl for w in STRONG_KEYWORDS)
     md = sum(w in hl for w in MODERATE_KEYWORDS)
     pr = sum(w in hl for w in PRIORITY_KEYWORDS)
     score = min(100, hi*30 + st*20 + md*10 + pr*5)
-    label = ("High" if score >= 80 else
-             "Medium" if score >= CONFIDENCE_THRESHOLD else
-             "Low")
+    if score >= 80:
+        label = "High"
+    elif score >= CONFIDENCE_THRESHOLD:
+        label = "Medium"
+    else:
+        label = "Low"
     return score, label
+
 
 # === ALERT UTILITIES ===
 def send_alert(title: str, ticker: str, sentiment: float,
