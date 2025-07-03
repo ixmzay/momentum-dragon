@@ -1,4 +1,3 @@
-
 import time
 import re
 import json
@@ -280,14 +279,18 @@ def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_
     ml_pred, ml_conf = classify_text(title)
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # Compose base message using a triple-quoted f-string to avoid unterminated issues
-    msg = f"""
-🗞 *{source} Alert*
-*{ticker}* — {title}
-📈 Sentiment: *{sentiment_label}* (`{sentiment:.2f}`)
-🎯 Confidence: *{conf_score}%* ({conf_label})
-"""
-    # Append ML info
+    # Compose core message
+    msg = (
+        f"🗞 *{source} Alert*
+"
+        f"*{ticker}* — {title}
+"
+        f"📈 Sentiment: *{sentiment_label}* (`{sentiment:.2f}`)
+"
+        f"🎯 Confidence: *{conf_score}%* ({conf_label})
+"
+    )
+    # Append ML insights
     if ml_pred:
         msg += f"🤖 ML: *{ml_pred}* ({ml_conf}%)
 "
@@ -395,3 +398,4 @@ if __name__ == "__main__":
             time.sleep(60)
         except Exception as e:
             print(f"💥 Main loop error: {e}")
+            time.sleep(10)
