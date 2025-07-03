@@ -293,14 +293,14 @@ def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_
     lines.append(f"🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}")
 
     # Join and send
-    msg = "
-".join(lines)
+    # Correct:
+msg = "\n".join(lines)
     send_to_telegram(msg)
 
     # Log and rate-limit
     sent_news.add(title)
-    SENT_LOG_PATH.write_text("
-".join(sent_news), encoding="utf-8")
+    # Correct:
+SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
     update_rate_limit(ticker)
 
 # === ALERT RULE === ===
