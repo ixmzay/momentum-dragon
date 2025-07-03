@@ -40,9 +40,9 @@ BENZINGA_API_KEY   = "bz.XAO6BCTUMYPFGHXXL7SJ3ZU4IRRTFRE7"
 BENZINGA_URL       = "https://api.benzinga.com/api/v2/news"
 
 # === THRESHOLDS & LIMITS ===
-CONFIDENCE_THRESHOLD = 60    # keyword-based medium cutoff
-FINBERT_THRESHOLD    = 0.15  # FinBERT net sentiment threshold
-RATE_LIMIT_SECONDS   = 1800  # 30-minute cooldown per ticker
+CONFIDENCE_THRESHOLD = 60     # keyword-based medium cutoff
+FINBERT_THRESHOLD    = 0.15   # FinBERT net sentiment threshold
+RATE_LIMIT_SECONDS   = 1800   # 30-minute cooldown per ticker
 
 # === LOG FILE PATHS ===
 SENT_LOG_PATH        = Path("sent_titles.txt")
@@ -143,14 +143,34 @@ WATCHLIST = {
     "QCOM": ["QCOM", "Qualcomm"]
 }
 
+# === OVERRIDE LISTS ===
+BULLISH_OVERRIDES = [
+    "dividend", "buyback", "upgrade", "beat estimates", "raise",
+    "surge", "outperform", "jump", "jumps", "gain", "gains",
+    "rise", "rises", "soar", "soars", "rally", "rallies", "higher"
+]
+BEARISH_OVERRIDES = [
+    "downgrade", "miss estimates", "warning", "cut", "plunge",
+    "plunges", "crash", "crashes", "selloff", "sell-off", "fall", "falls",
+    "decline", "declines", "drop", "drops", "slump", "slumps"
+]
+
 # === BASE KEYWORDS & SYNONYMS ===
-BASE_CRITICAL = ["bankruptcy", "insider trading", "sec investigation", "fda approval",
-                 "data breach", "class action", "restructuring", "failure to file"]
-BASE_STRONG   = ["upgrade", "beat estimates", "record", "surge", "outperform",
-                 "raise", "warning", "cut"]
-BASE_MODERATE = ["buy", "positive", "growth", "profit", "decline", "drop", "loss"]
-BASE_PRIORITY = ["earnings", "downgrade", "price target", "miss estimates", "guidance",
-                 "dividend", "buyback", "merger", "acquisition", "ipo", "layoff", "revenue"]
+BASE_CRITICAL = [
+    "bankruptcy", "insider trading", "sec investigation", "fda approval",
+    "data breach", "class action", "restructuring", "failure to file"
+]
+BASE_STRONG = [
+    "upgrade", "beat estimates", "record", "surge", "outperform",
+    "raise", "warning", "cut"
+]
+BASE_MODERATE = [
+    "buy", "positive", "growth", "profit", "decline", "drop", "loss"
+]
+BASE_PRIORITY = [
+    "earnings", "downgrade", "price target", "miss estimates", "guidance",
+    "dividend", "buyback", "merger", "acquisition", "ipo", "layoff", "revenue"
+]
 
 def expand_synonyms(words):
     syns = set(words)
@@ -201,9 +221,11 @@ def suggest_confidence_threshold(pct: float = 0.75):
         return
     scores.sort()
     idx = int(len(scores) * pct)
-    suggestion = scores[min(idx, len(scores)-1)]
-    print(f"💡 {int(pct*100)}th percentile keyword score is {suggestion}. "
-          f"Consider CONFIDENCE_THRESHOLD = {suggestion}")
+    suggestion = scores[min(idx, len(scores) - 1)]
+    print(
+        f"💡 Based on your data, {int(pct*100)}th percentile "
+        f"keyword score is {suggestion}. Consider CONFIDENCE_THRESHOLD = {suggestion}"
+    )
 
 # === FINBERT SETUP ===
 finbert_tokenizer = BertTokenizer.from_pretrained("yiyanghkust/finbert-tone")
@@ -215,8 +237,14 @@ def analyze_sentiment(text: str) -> float:
     probs   = F.softmax(outputs.logits, dim=1).detach().numpy()[0]
     return probs[2] - probs[0]
 
-def get_sentiment_label(score: float) -> str:
-    # broaden neutral band to ±0.2
+def get_sentiment_label(score: float, text: str) -> str:
+    txt = text.lower()
+    # 1) overrides
+    if any(kw in txt for kw in BULLISH_OVERRIDES):
+        return "Bullish"
+    if any(kw in txt for kw in BEARISH_OVERRIDES):
+        return "Bearish"
+    # 2) FinBERT thresholds
     if score > 0.2:
         return "Bullish"
     if score < -0.2:
@@ -297,16 +325,16 @@ def calculate_confidence(headline: str) -> (int, str):
         label = "Low"
     return score, label
 
-
 # === ALERT UTILITIES ===
-def send_alert(title: str, ticker: str, sentiment: float,
-               conf_score: int, conf_label: str, source: str):
-    sentiment_label = get_sentiment_label(sentiment)
-    bullish_overrides = ["dividend", "buyback", "upgrade",
-                         "beat estimates", "raise", "surge", "outperform"]
-    if any(kw in title.lower() for kw in bullish_overrides):
-        sentiment_label = "Bullish"
-
+def send_alert(
+    title: str,
+    ticker: str,
+    sentiment: float,
+    conf_score: int,
+    conf_label: str,
+    sentiment_label: str,
+    source: str
+):
     vix_val, vix_lbl = get_vix_level()
     ml_pred, ml_conf = classify_text(title)
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -329,12 +357,10 @@ def send_alert(title: str, ticker: str, sentiment: float,
     update_rate_limit(ticker)
 
 # === ALERT RULE ===
-def should_send_alert(title: str, ticker: str,
-                      conf_score: int, sentiment: float) -> bool:
+def should_send_alert(title: str, ticker: str, conf_score: int, sentiment: float) -> bool:
     if title in sent_news or is_rate_limited(ticker):
         return False
-    return (conf_score >= CONFIDENCE_THRESHOLD or
-            abs(sentiment) >= FINBERT_THRESHOLD)
+    return (conf_score >= CONFIDENCE_THRESHOLD or abs(sentiment) >= FINBERT_THRESHOLD)
 
 # === ARTICLE FETCH ===
 def fetch_article_content(url: str) -> str:
@@ -356,10 +382,15 @@ def process_yahoo_entry(entry):
     conf_score, conf_label = calculate_confidence(title)
     article_text = fetch_article_content(url) if url else title
     sentiment    = analyze_sentiment(article_text)
-    print(f"   → ticker: {ticker} │ conf: {conf_score}% ({conf_label}) │ sentiment: {sentiment:.2f}")
+    sentiment_label = get_sentiment_label(sentiment, article_text)
+    print(
+        f"   → ticker: {ticker} │ "
+        f"conf: {conf_score}% ({conf_label}) │ "
+        f"sentiment: {sentiment:.2f} ({sentiment_label})"
+    )
     if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → sending alert")
-        send_alert(title, ticker, sentiment, conf_score, conf_label, "Yahoo")
+        send_alert(title, ticker, sentiment, conf_score, conf_label, sentiment_label, "Yahoo")
     else:
         print("   → filtered out")
 
@@ -396,10 +427,15 @@ def process_benzinga_article(article):
     conf_score, conf_label = calculate_confidence(title)
     article_text = fetch_article_content(url) if url else title
     sentiment    = analyze_sentiment(article_text)
-    print(f"   → ticker: {ticker} │ conf: {conf_score}% ({conf_label}) │ sentiment: {sentiment:.2f}")
+    sentiment_label = get_sentiment_label(sentiment, article_text)
+    print(
+        f"   → ticker: {ticker} │ "
+        f"conf: {conf_score}% ({conf_label}) │ "
+        f"sentiment: {sentiment:.2f} ({sentiment_label})"
+    )
     if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → sending alert")
-        send_alert(title, ticker, sentiment, conf_score, conf_label, "Benzinga")
+        send_alert(title, ticker, sentiment, conf_score, conf_label, sentiment_label, "Benzinga")
     else:
         print("   → filtered out")
 
@@ -414,9 +450,10 @@ def analyze_benzinga():
 
 # === MAIN LOOP ===
 if __name__ == "__main__":
-    sent_news       = set(SENT_LOG_PATH.read_text(encoding="utf-8").splitlines()) if SENT_LOG_PATH.exists()       else set()
+    # Load persistent data
+    sent_news       = set(SENT_LOG_PATH.read_text(encoding="utf-8").splitlines()) if SENT_LOG_PATH.exists() else set()
     rate_limit_data = json.loads(RATE_LIMIT_LOG_PATH.read_text(encoding="utf-8")) if RATE_LIMIT_LOG_PATH.exists() else {}
-    training_data   = json.loads(TRAINING_DATA_PATH.read_text(encoding="utf-8")) if TRAINING_DATA_PATH.exists()    else {"texts": [], "labels": []}
+    training_data   = json.loads(TRAINING_DATA_PATH.read_text(encoding="utf-8")) if TRAINING_DATA_PATH.exists() else {"texts": [], "labels": []}
 
     print("🚀 Starting market bot...")
     suggest_confidence_threshold(0.75)
@@ -430,4 +467,3 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"💥 Main loop error: {e}")
             time.sleep(10)
-
