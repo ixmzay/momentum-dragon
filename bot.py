@@ -395,4 +395,3 @@ if __name__ == "__main__":
             time.sleep(60)
         except Exception as e:
             print(f"💥 Main loop error: {e}")
-            time.sleep(10)
