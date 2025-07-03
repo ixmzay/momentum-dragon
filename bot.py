@@ -267,6 +267,7 @@ def calculate_confidence(headline: str) -> (int, str):
     return score, label
 
 # === ALERT UTILITIES ===
+# === ALERT UTILITIES ===
 def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_label: str, source: str):
     # Determine initial sentiment label
     sentiment_label = get_sentiment_label(sentiment)
@@ -302,7 +303,7 @@ def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_
 ".join(sent_news), encoding="utf-8")
     update_rate_limit(ticker)
 
-# === ALERT RULE ===
+# === ALERT RULE === ===
 def should_send_alert(title: str, ticker: str, conf_score: int, sentiment: float) -> bool:
     if title in sent_news or is_rate_limited(ticker):
         return False
