@@ -290,6 +290,7 @@ def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_
     if ml_pred:
         msg += f"🤖 ML: *{ml_pred}* ({ml_conf}%)
 "
+"
     # Append VIX and timestamp
     msg += f"🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}"
 
