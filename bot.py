@@ -270,7 +270,6 @@ def calculate_confidence(headline: str) -> (int, str):
 def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_label: str, source: str):
     # Determine initial sentiment label
     sentiment_label = get_sentiment_label(sentiment)
-    # Override FinBERT if clear bullish keywords are present
     bullish_overrides = ["dividend", "buyback", "upgrade", "beat estimates", "raise", "surge", "outperform"]
     if any(kw in title.lower() for kw in bullish_overrides):
         sentiment_label = "Bullish"
@@ -278,8 +277,8 @@ def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_
     # Fetch VIX and ML signals
     vix_val, vix_lbl = get_vix_level()
     ml_pred, ml_conf = classify_text(title)
-    timestamp        = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
     # Compose message
     msg = (
         f"🗞 *{source} Alert*
@@ -294,30 +293,13 @@ def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_
         msg += f"
 🤖 ML: *{ml_pred}* ({ml_conf}%)"
     msg += f"
-🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}"    
-    
+🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}"
+
     # Send and log
     send_to_telegram(msg)
     sent_news.add(title)
     SENT_LOG_PATH.write_text("
 ".join(sent_news), encoding="utf-8")
-    update_rate_limit(ticker)
-    sentiment_label = get_sentiment_label(sentiment)
-    vix_val, vix_lbl = get_vix_level()
-    ml_pred, ml_conf = classify_text(title)
-    timestamp        = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    msg = (
-        f"🗞 *{source} Alert*\n"
-        f"*{ticker}* — {title}\n"
-        f"📈 Sentiment: *{sentiment_label}* (`{sentiment:.2f}`)\n"
-        f"🎯 Confidence: *{conf_score}%* ({conf_label})"
-    )
-    if ml_pred:
-        msg += f"\n🤖 ML: *{ml_pred}* ({ml_conf}%)"
-    msg += f"\n🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}"    
-    send_to_telegram(msg)
-    sent_news.add(title)
-    SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
     update_rate_limit(ticker)
 
 # === ALERT RULE ===
