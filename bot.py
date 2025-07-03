@@ -20,6 +20,20 @@ from transformers import BertTokenizer, BertForSequenceClassification
 import torch.nn.functional as F
 
 # Synonym expansion
+import bs4
+from bs4 import BeautifulSoup
+
+# === ARTICLE SCRAPING ===
+def fetch_article_content(url: str) -> str:
+    try:
+        resp = requests.get(url, timeout=10)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        paragraphs = soup.find_all('p')
+        text = ' '.join(p.get_text() for p in paragraphs)
+        return text
+    except Exception as e:
+        print(f"❌ Article fetch error: {e}")
+        return ""
 import nltk
 from nltk.corpus import wordnet
 
@@ -254,6 +268,40 @@ def calculate_confidence(headline: str) -> (int, str):
 
 # === ALERT UTILITIES ===
 def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_label: str, source: str):
+    # Determine initial sentiment label
+    sentiment_label = get_sentiment_label(sentiment)
+    # Override FinBERT if clear bullish keywords are present
+    bullish_overrides = ["dividend", "buyback", "upgrade", "beat estimates", "raise", "surge", "outperform"]
+    if any(kw in title.lower() for kw in bullish_overrides):
+        sentiment_label = "Bullish"
+
+    # Fetch VIX and ML signals
+    vix_val, vix_lbl = get_vix_level()
+    ml_pred, ml_conf = classify_text(title)
+    timestamp        = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Compose message
+    msg = (
+        f"🗞 *{source} Alert*
+"
+        f"*{ticker}* — {title}
+"
+        f"📈 Sentiment: *{sentiment_label}* (`{sentiment:.2f}`)
+"
+        f"🎯 Confidence: *{conf_score}%* ({conf_label})"
+    )
+    if ml_pred:
+        msg += f"
+🤖 ML: *{ml_pred}* ({ml_conf}%)"
+    msg += f"
+🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}"    
+    
+    # Send and log
+    send_to_telegram(msg)
+    sent_news.add(title)
+    SENT_LOG_PATH.write_text("
+".join(sent_news), encoding="utf-8")
+    update_rate_limit(ticker)
     sentiment_label = get_sentiment_label(sentiment)
     vix_val, vix_lbl = get_vix_level()
     ml_pred, ml_conf = classify_text(title)
@@ -281,10 +329,13 @@ def should_send_alert(title: str, ticker: str, conf_score: int, sentiment: float
 # === PROCESS & ALERT ===
 def process_yahoo_entry(entry):
     title = entry.get("title", "").strip()
+    url   = entry.get("link", "")
     print("▶️ Yahoo headline:", title)
     ticker = match_watchlist(title)
     conf_score, conf_label = calculate_confidence(title)
-    sentiment = analyze_sentiment(title)
+    # Fetch full article text for deeper sentiment
+    article_text = fetch_article_content(url) if url else title
+    sentiment = analyze_sentiment(article_text)
     print(f"   → ticker: {ticker}  │ conf_score: {conf_score}% ({conf_label})  │ sentiment: {sentiment:.2f}")
     if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → passing filters, sending alert")
@@ -321,10 +372,13 @@ def fetch_benzinga(chunk):
 
 def process_benzinga_article(article):
     title = article.get("title", "").strip()
+    url   = article.get("url") or article.get("sourceUrl", "")
     print("▶️ Benzinga headline:", title)
     ticker = match_watchlist(title)
     conf_score, conf_label = calculate_confidence(title)
-    sentiment = analyze_sentiment(title)
+    # Fetch full article text for deeper sentiment
+    article_text = fetch_article_content(url) if url else title
+    sentiment = analyze_sentiment(article_text)
     print(f"   → ticker: {ticker}  │ conf_score: {conf_score}% ({conf_label})  │ sentiment: {sentiment:.2f}")
     if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → passing filters, sending alert")
