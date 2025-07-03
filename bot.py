@@ -3,7 +3,7 @@ import re
 import json
 import threading
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 import feedparser
@@ -30,22 +30,28 @@ except LookupError:
     nltk.download('wordnet')
 
 # === TELEGRAM CONFIG ===
-TELEGRAM_TOKEN = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
-TELEGRAM_CHAT_ID = "5528794335"
+TELEGRAM_TOKEN     = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
+TELEGRAM_CHAT_ID   = "5528794335"
 
 # === RSS & BENZINGA CONFIG ===
-RSS_URL           = "https://finance.yahoo.com/rss/topstories"
-BENZINGA_API_KEY  = "bz.XAO6BCTUMYPFGHXXL7SJ3ZU4IRRTFRE7"
-BENZINGA_URL      = "https://api.benzinga.com/api/v2/news"
+RSS_URL            = "https://finance.yahoo.com/rss/topstories"
+BENZINGA_API_KEY   = "bz.XAO6BCTUMYPFGHXXL7SJ3ZU4IRRTFRE7"
+BENZINGA_URL       = "https://api.benzinga.com/api/v2/news"
 
 # === THRESHOLDS & LIMITS ===
-CONFIDENCE_THRESHOLD  = 60     # Medium cutoff raised to 60
-RATE_LIMIT_SECONDS    = 1800   # 30-minute cooldown per ticker
+CONFIDENCE_THRESHOLD = 60     # keyword-based medium cutoff
+FINBERT_THRESHOLD    = 0.15   # FinBERT net sentiment threshold
+RATE_LIMIT_SECONDS   = 1800   # 30-minute cooldown per ticker
 
 # === LOG FILE PATHS ===
-SENT_LOG_PATH       = Path("sent_titles.txt")
-RATE_LIMIT_LOG_PATH = Path("rate_limit.json")
-TRAINING_DATA_PATH  = Path("training_data.json")
+SENT_LOG_PATH        = Path("sent_titles.txt")
+RATE_LIMIT_LOG_PATH  = Path("rate_limit.json")
+TRAINING_DATA_PATH   = Path("training_data.json")
+
+# === PERSISTENT STORAGE LOADED IN MAIN ===
+sent_news       = set()
+rate_limit_data = {}
+training_data   = {"texts": [], "labels": []}
 
 # === WATCHLIST ===
 WATCHLIST = {
@@ -136,18 +142,18 @@ WATCHLIST = {
     "QCOM": ["QCOM", "Qualcomm"]
 }
 
-# === BASE KEYWORDS ===
-BASE_CRITICAL   = ["bankruptcy", "insider trading", "sec investigation", "fda approval", "data breach", "class action", "restructuring", "failure to file"]
-BASE_STRONG     = ["upgrade", "beat estimates", "record", "surge", "outperform", "raise", "warning", "cut"]
-BASE_MODERATE   = ["buy", "positive", "growth", "profit", "decline", "drop", "loss"]
-BASE_PRIORITY   = ["earnings", "downgrade", "price target", "miss estimates", "guidance", "dividend", "buyback", "merger", "acquisition", "ipo", "layoff", "revenue"]
+# === BASE KEYWORDS & SYNONYMS ===
+BASE_CRITICAL = ["bankruptcy", "insider trading", "sec investigation", "fda approval", "data breach", "class action", "restructuring", "failure to file"]
+BASE_STRONG   = ["upgrade", "beat estimates", "record", "surge", "outperform", "raise", "warning", "cut"]
+BASE_MODERATE = ["buy", "positive", "growth", "profit", "decline", "drop", "loss"]
+BASE_PRIORITY = ["earnings", "downgrade", "price target", "miss estimates", "guidance", "dividend", "buyback", "merger", "acquisition", "ipo", "layoff", "revenue"]
 
 def expand_synonyms(words):
     syns = set(words)
     for w in words:
         for synset in wordnet.synsets(w):
             for lemma in synset.lemmas():
-                syns.add(lemma.name().lower().replace('_', ' '))
+                syns.add(lemma.name().lower().replace('_',' '))
     return list(syns)
 
 CRITICAL_KEYWORDS = expand_synonyms(BASE_CRITICAL)
@@ -192,10 +198,9 @@ def analyze_sentiment(text: str) -> float:
 def get_sentiment_label(score: float) -> str:
     if score > 0.05:
         return "Bullish"
-    elif score < -0.05:
+    if score < -0.05:
         return "Bearish"
-    else:
-        return "Neutral"
+    return "Neutral"
 
 def get_vix_level():
     try:
@@ -210,6 +215,7 @@ def get_vix_level():
     except Exception as e:
         return None, f"❌ VIX error: {e}"
 
+# === TELEGRAM & RATE LIMIT ===
 def send_to_telegram(message: str):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
     try:
@@ -227,6 +233,7 @@ def update_rate_limit(ticker: str):
     rate_limit_data[ticker] = time.time()
     RATE_LIMIT_LOG_PATH.write_text(json.dumps(rate_limit_data), encoding="utf-8")
 
+# === MATCH & SCORE ===
 def match_watchlist(text: str) -> str:
     tl = text.lower()
     for ticker, kws in WATCHLIST.items():
@@ -242,44 +249,28 @@ def calculate_confidence(headline: str) -> (int, str):
     md = sum(w in hl for w in MODERATE_KEYWORDS)
     pr = sum(w in hl for w in PRIORITY_KEYWORDS)
     score = min(100, hi*30 + st*20 + md*10 + pr*5)
-    label = "High" if score >= 80 else "Medium" if score >= CONFIDENCE_THRESHOLD else "Low"
+    label = "High" if score>=80 else "Medium" if score>=CONFIDENCE_THRESHOLD else "Low"
     return score, label
 
-def should_send_alert(title: str, ticker: str, conf_score: int) -> bool:
+# === ALERT RULE ===
+def should_send_alert(title: str, ticker: str, conf_score: int, sentiment: float) -> bool:
     if title in sent_news or is_rate_limited(ticker):
         return False
-    if ticker == "GENERAL" and conf_score < CONFIDENCE_THRESHOLD:
-        return False
-    return True
+    if (conf_score >= CONFIDENCE_THRESHOLD) or (abs(sentiment) >= FINBERT_THRESHOLD):
+        return True
+    return False
 
-def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_label: str, source: str):
-    sentiment_label = get_sentiment_label(sentiment)
-    vix_val, vix_lbl = get_vix_level()
-    ml_pred, ml_conf = classify_text(title)
-    timestamp        = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    msg = (
-        f"🗞 *{source} Alert*\n"
-        f"*{ticker}* — {title}\n"
-        f"📈 Sentiment: *{sentiment_label}* (`{sentiment:.2f}`)\n"
-        f"🎯 Confidence: *{conf_score}%* ({conf_label})"
-    )
-    if ml_pred:
-        msg += f"\n🤖 ML: *{ml_pred}* ({ml_conf}%)"
-    msg += f"\n🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}"
-    send_to_telegram(msg)
-    sent_news.add(title)
-    SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
-    update_rate_limit(ticker)
-
+# === PROCESS & ALERT ===
 def process_yahoo_entry(entry):
     title = entry.get("title", "").strip()
     print("▶️ Yahoo headline:", title)
     ticker = match_watchlist(title)
     conf_score, conf_label = calculate_confidence(title)
-    print(f"   → ticker: {ticker}  │ conf_score: {conf_score}% ({conf_label})")
-    if should_send_alert(title, ticker, conf_score):
+    sentiment = analyze_sentiment(title)
+    print(f"   → ticker: {ticker}  │ conf_score: {conf_score}% ({conf_label})  │ sentiment: {sentiment:.2f}")
+    if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → passing filters, sending alert")
-        sentiment = analyze_sentiment(title)
+        sentiment_label = get_sentiment_label(sentiment)
         send_alert(title, ticker, sentiment, conf_score, conf_label, "Yahoo")
     else:
         print("   → filtered out, not sending")
@@ -290,6 +281,7 @@ def analyze_yahoo():
     for entry in feed.entries:
         process_yahoo_entry(entry)
     print("✅ Yahoo done.")
+
 
 def fetch_benzinga(chunk):
     try:
@@ -308,35 +300,38 @@ def fetch_benzinga(chunk):
         print(f"❌ Benzinga error: {e}")
         return []
 
+
 def process_benzinga_article(article):
     title = article.get("title", "").strip()
     print("▶️ Benzinga headline:", title)
     ticker = match_watchlist(title)
     conf_score, conf_label = calculate_confidence(title)
-    print(f"   → ticker: {ticker}  │ conf_score: {conf_score}% ({conf_label})")
-    if should_send_alert(title, ticker, conf_score):
+    sentiment = analyze_sentiment(title)
+    print(f"   → ticker: {ticker}  │ conf_score: {conf_score}% ({conf_label})  │ sentiment: {sentiment:.2f}")
+    if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → passing filters, sending alert")
-        sentiment = analyze_sentiment(title)
         send_alert(title, ticker, sentiment, conf_score, conf_label, "Benzinga")
     else:
         print("   → filtered out, not sending")
+
 
 def analyze_benzinga():
     print("📡 Scanning Benzinga...")
     symbols = list(WATCHLIST.keys())
     for i in range(0, len(symbols), 20):
         chunk = symbols[i:i+20]
-        for article in fetch_benzinga(chunk):
-            process_benzinga_article(article)
+        for art in fetch_benzinga(chunk):
+            process_benzinga_article(art)
     print("✅ Benzinga done.")
 
+# === MAIN LOOP ===
 if __name__ == "__main__":
-    print("🚀 Starting market bot...")
     # Load persistent data
     sent_news       = set(SENT_LOG_PATH.read_text(encoding="utf-8").splitlines()) if SENT_LOG_PATH.exists() else set()
     rate_limit_data = json.loads(RATE_LIMIT_LOG_PATH.read_text(encoding="utf-8")) if RATE_LIMIT_LOG_PATH.exists() else {}
     training_data   = json.loads(TRAINING_DATA_PATH.read_text(encoding="utf-8")) if TRAINING_DATA_PATH.exists() else {"texts": [], "labels": []}
 
+    print("🚀 Starting market bot...")
     train_model()
     while True:
         try:
