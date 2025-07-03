@@ -48,7 +48,7 @@ SENT_LOG_PATH        = Path("sent_titles.txt")
 RATE_LIMIT_LOG_PATH  = Path("rate_limit.json")
 TRAINING_DATA_PATH   = Path("training_data.json")
 
-# === PERSISTENT STORAGE LOADED IN MAIN ===
+# === PERSISTENT STORAGE (loaded in main) ===
 sent_news       = set()
 rate_limit_data = {}
 training_data   = {"texts": [], "labels": []}
@@ -252,13 +252,31 @@ def calculate_confidence(headline: str) -> (int, str):
     label = "High" if score>=80 else "Medium" if score>=CONFIDENCE_THRESHOLD else "Low"
     return score, label
 
+# === ALERT UTILITIES ===
+def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_label: str, source: str):
+    sentiment_label = get_sentiment_label(sentiment)
+    vix_val, vix_lbl = get_vix_level()
+    ml_pred, ml_conf = classify_text(title)
+    timestamp        = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    msg = (
+        f"🗞 *{source} Alert*\n"
+        f"*{ticker}* — {title}\n"
+        f"📈 Sentiment: *{sentiment_label}* (`{sentiment:.2f}`)\n"
+        f"🎯 Confidence: *{conf_score}%* ({conf_label})"
+    )
+    if ml_pred:
+        msg += f"\n🤖 ML: *{ml_pred}* ({ml_conf}%)"
+    msg += f"\n🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}"    
+    send_to_telegram(msg)
+    sent_news.add(title)
+    SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
+    update_rate_limit(ticker)
+
 # === ALERT RULE ===
 def should_send_alert(title: str, ticker: str, conf_score: int, sentiment: float) -> bool:
     if title in sent_news or is_rate_limited(ticker):
         return False
-    if (conf_score >= CONFIDENCE_THRESHOLD) or (abs(sentiment) >= FINBERT_THRESHOLD):
-        return True
-    return False
+    return (conf_score >= CONFIDENCE_THRESHOLD) or (abs(sentiment) >= FINBERT_THRESHOLD)
 
 # === PROCESS & ALERT ===
 def process_yahoo_entry(entry):
@@ -270,10 +288,10 @@ def process_yahoo_entry(entry):
     print(f"   → ticker: {ticker}  │ conf_score: {conf_score}% ({conf_label})  │ sentiment: {sentiment:.2f}")
     if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → passing filters, sending alert")
-        sentiment_label = get_sentiment_label(sentiment)
         send_alert(title, ticker, sentiment, conf_score, conf_label, "Yahoo")
     else:
         print("   → filtered out, not sending")
+
 
 def analyze_yahoo():
     print("📡 Scanning Yahoo RSS...")
@@ -282,12 +300,12 @@ def analyze_yahoo():
         process_yahoo_entry(entry)
     print("✅ Yahoo done.")
 
-
+# === BENZINGA PROCESSING ===
 def fetch_benzinga(chunk):
     try:
         resp = requests.get(
             BENZINGA_URL,
-            params={"tickers": ",".join(chunk), "items": 50, "token": BENZINGA_API_KEY},
+            params={"tickers": ",".join(chunk), "items":50, "token":BENZINGA_API_KEY},
             timeout=10
         )
         print("🔍 Benzinga HTTP:", resp.status_code, resp.text[:100])
