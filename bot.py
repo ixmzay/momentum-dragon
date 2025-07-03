@@ -268,7 +268,7 @@ def calculate_confidence(headline: str) -> (int, str):
 
 # === ALERT UTILITIES ===
 def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_label: str, source: str):
-    # Determine initial sentiment label
+    # Determine sentiment label
     sentiment_label = get_sentiment_label(sentiment)
     bullish_overrides = ["dividend", "buyback", "upgrade", "beat estimates", "raise", "surge", "outperform"]
     if any(kw in title.lower() for kw in bullish_overrides):
@@ -279,21 +279,19 @@ def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_
     ml_pred, ml_conf = classify_text(title)
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # Compose message
-    msg = (
-        f"🗞 *{source} Alert*
-"
-        f"*{ticker}* — {title}
-"
-        f"📈 Sentiment: *{sentiment_label}* (`{sentiment:.2f}`)
-"
-        f"🎯 Confidence: *{conf_score}%* ({conf_label})"
-    )
+    # Compose base message using a triple-quoted f-string to avoid unterminated issues
+    msg = f"""
+🗞 *{source} Alert*
+*{ticker}* — {title}
+📈 Sentiment: *{sentiment_label}* (`{sentiment:.2f}`)
+🎯 Confidence: *{conf_score}%* ({conf_label})
+"""
+    # Append ML info
     if ml_pred:
-        msg += f"
-🤖 ML: *{ml_pred}* ({ml_conf}%)"
-    msg += f"
-🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}"
+        msg += f"🤖 ML: *{ml_pred}* ({ml_conf}%)
+"
+    # Append VIX and timestamp
+    msg += f"🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {timestamp}"
 
     # Send and log
     send_to_telegram(msg)
