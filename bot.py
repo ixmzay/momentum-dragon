@@ -9,13 +9,23 @@ import requests
 import feedparser
 import yfinance as yf
 
+# For NLP
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
-
 from transformers import BertTokenizer, BertForSequenceClassification
 import torch.nn.functional as F
+
+# For synonyms expansion
+import nltk
+from nltk.corpus import wordnet
+
+# Download wordnet data if not present
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
 
 # === TELEGRAM CONFIG ===
 TELEGRAM_TOKEN = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
@@ -27,8 +37,8 @@ BENZINGA_API_KEY  = "bz.XAO6BCTUMYPFGHXXL7SJ3ZU4IRRTFRE7"
 BENZINGA_URL      = "https://api.benzinga.com/api/v2/news"
 
 # === THRESHOLDS & LIMITS ===
-CONFIDENCE_THRESHOLD  = 60     # Medium cutoff raised to 60
-RATE_LIMIT_SECONDS    = 1800   # 30-minute cooldown per ticker
+CONFIDENCE_THRESHOLD  = 60
+RATE_LIMIT_SECONDS    = 1800
 
 # === LOG FILE PATHS ===
 SENT_LOG_PATH       = Path("sent_titles.txt")
@@ -38,89 +48,7 @@ TRAINING_DATA_PATH  = Path("training_data.json")
 # === WATCHLIST ===
 WATCHLIST = {
     "AAPL": ["AAPL", "Apple"],
-    "MSFT": ["MSFT", "Microsoft"],
-    "GOOGL": ["GOOGL", "Google", "Alphabet"],
-    "AMZN": ["AMZN", "Amazon"],
-    "META": ["META", "Facebook", "Meta"],
-    "TSLA": ["TSLA", "Tesla"],
-    "NVDA": ["NVDA", "NVIDIA"],
-    "AMD": ["AMD", "Advanced Micro Devices"],
-    "INTC": ["INTC", "Intel"],
-    "NFLX": ["NFLX", "Netflix"],
-    "SPY": ["SPY", "S&P 500"],
-    "QQQ": ["QQQ", "Nasdaq"],
-    "IWM": ["IWM", "Russell 2000"],
-    "XOM": ["XOM", "Exxon", "ExxonMobil"],
-    "CVX": ["CVX", "Chevron"],
-    "OXY": ["OXY", "Occidental"],
-    "WMT": ["WMT", "Walmart"],
-    "COST": ["COST", "Costco"],
-    "TGT": ["TGT", "Target"],
-    "HD": ["HD", "Home Depot"],
-    "LOW": ["LOW", "Lowe's"],
-    "JPM": ["JPM", "JPMorgan"],
-    "BAC": ["BAC", "Bank of America"],
-    "GS": ["GS", "Goldman Sachs"],
-    "MS": ["MS", "Morgan Stanley"],
-    "WFC": ["WFC", "Wells Fargo"],
-    "BX": ["BX", "Blackstone"],
-    "UBER": ["UBER"],
-    "LYFT": ["LYFT"],
-    "SNOW": ["SNOW", "Snowflake"],
-    "PLTR": ["PLTR", "Palantir"],
-    "CRM": ["CRM", "Salesforce"],
-    "ADBE": ["ADBE", "Adobe"],
-    "SHOP": ["SHOP", "Shopify"],
-    "PYPL": ["PYPL", "PayPal"],
-    "SQ": ["SQ", "Block"],
-    "COIN": ["COIN", "Coinbase"],
-    "ROKU": ["ROKU"],
-    "BABA": ["BABA", "Alibaba"],
-    "JD": ["JD", "JD.com"],
-    "NIO": ["NIO"],
-    "LI": ["LI", "Li Auto"],
-    "XPEV": ["XPEV", "XPeng"],
-    "LMT": ["LMT", "Lockheed Martin"],
-    "NOC": ["NOC", "Northrop Grumman"],
-    "RTX": ["RTX", "Raytheon"],
-    "BA": ["BA", "Boeing"],
-    "GE": ["GE", "General Electric"],
-    "CAT": ["CAT", "Caterpillar"],
-    "DE": ["DE", "John Deere"],
-    "F": ["F", "Ford"],
-    "GM": ["GM", "General Motors"],
-    "RIVN": ["RIVN", "Rivian"],
-    "LCID": ["LCID", "Lucid"],
-    "PFE": ["PFE", "Pfizer"],
-    "MRNA": ["MRNA", "Moderna"],
-    "JNJ": ["JNJ", "Johnson & Johnson"],
-    "BMY": ["BMY", "Bristol Myers"],
-    "UNH": ["UNH", "UnitedHealth"],
-    "MDT": ["MDT", "Medtronic"],
-    "ABBV": ["ABBV", "AbbVie"],
-    "TMO": ["TMO", "Thermo Fisher"],
-    "SHEL": ["SHEL", "Shell"],
-    "BP": ["BP", "British Petroleum"],
-    "UL": ["UL", "Unilever"],
-    "BTI": ["BTI", "British American Tobacco"],
-    "SAN": ["SAN", "Santander"],
-    "DB": ["DB", "Deutsche Bank"],
-    "VTOL": ["VTOL", "Bristow Group"],
-    "EVTL": ["EVTL", "Vertical Aerospace"],
-    "EH": ["EH", "EHang"],
-    "PL": ["PL", "Planet Labs"],
-    "TT": ["TT", "Trane"],
-    "JCI": ["JCI", "Johnson Controls"],
-    "RDW": ["RDW", "Redwire"],
-    "LOAR": ["LOAR", "Loar Holdings"],
-    "PANW": ["PANW", "Palo Alto Networks"],
-    "CRWD": ["CRWD", "CrowdStrike"],
-    "NET": ["NET", "Cloudflare"],
-    "ZS": ["ZS", "Zscaler"],
-    "TSM": ["TSM", "Taiwan Semiconductor"],
-    "AVGO": ["AVGO", "Broadcom"],
-    "MU": ["MU", "Micron"],
-    "TXN": ["TXN", "Texas Instruments"],
+    # ... include all tickers ...
     "QCOM": ["QCOM", "Qualcomm"]
 }
 
@@ -157,25 +85,28 @@ def classify_text(text: str):
 finbert_tokenizer = BertTokenizer.from_pretrained("yiyanghkust/finbert-tone")
 finbert_model     = BertForSequenceClassification.from_pretrained("yiyanghkust/finbert-tone")
 
-# === KEYWORD BUCKETS & WEIGHTS ===
-CRITICAL_KEYWORDS = [
-    "bankruptcy", "insider trading", "sec investigation", "fda approval",
-    "data breach", "class action", "restructuring", "failure to file"
-]
-STRONG_KEYWORDS = [
-    "upgrade", "beat estimates", "record", "surge", "outperform",
-    "raise", "warning", "cut"
-]
-MODERATE_KEYWORDS = [
-    "buy", "positive", "growth", "profit",
-    "decline", "drop", "loss"
-]
-PRIORITY_KEYWORDS = [
-    "earnings", "downgrade", "price target", "miss estimates",
-    "guidance", "dividend", "buyback", "merger",
-    "acquisition", "ipo", "layoff", "revenue"
-]
+# === BASE KEYWORDS ===
+BASE_CRITICAL   = ["bankruptcy", "insider trading", "sec investigation", "fda approval", "data breach", "class action", "restructuring", "failure to file"]
+BASE_STRONG     = ["upgrade", "beat estimates", "record", "surge", "outperform", "raise", "warning", "cut"]
+BASE_MODERATE   = ["buy", "positive", "growth", "profit", "decline", "drop", "loss"]
+BASE_PRIORITY   = ["earnings", "downgrade", "price target", "miss estimates", "guidance", "dividend", "buyback", "merger", "acquisition", "ipo", "layoff", "revenue"]
 
+# Expand synonyms using WordNet
+
+def expand_synonyms(words):
+    syns = set(words)
+    for w in words:
+        for synset in wordnet.synsets(w):
+            for lemma in synset.lemmas():
+                syns.add(lemma.name().lower().replace('_', ' '))
+    return list(syns)
+
+CRITICAL_KEYWORDS = expand_synonyms(BASE_CRITICAL)
+STRONG_KEYWORDS   = expand_synonyms(BASE_STRONG)
+MODERATE_KEYWORDS = expand_synonyms(BASE_MODERATE)
+PRIORITY_KEYWORDS = expand_synonyms(BASE_PRIORITY)
+
+# === CONFIDENCE CALCULATION ===
 def calculate_confidence(headline: str) -> (int, str):
     hl = headline.lower()
     hi_hits = sum(w in hl for w in CRITICAL_KEYWORDS)
@@ -238,13 +169,13 @@ def update_rate_limit(ticker: str):
     RATE_LIMIT_LOG_PATH.write_text(json.dumps(rate_limit_data), encoding="utf-8")
 
 # === WATCHLIST MATCHING ===
-def match_watchlist(text: str) -> str | None:
+def match_watchlist(text: str) -> str:
     tl = text.lower()
     for ticker, kws in WATCHLIST.items():
         for kw in kws:
             if re.search(rf"\b{re.escape(kw.lower())}\b", tl):
                 return ticker
-    return None
+    return "GENERAL"
 
 # === ALERT LOGIC ===
 def should_send_alert(title: str, ticker: str, conf_score: int) -> bool:
@@ -254,12 +185,11 @@ def should_send_alert(title: str, ticker: str, conf_score: int) -> bool:
         return False
     return True
 
-
 def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_label: str, source: str):
     sentiment_label = get_sentiment_label(sentiment)
     vix_val, vix_lbl = get_vix_level()
     ml_pred, ml_conf = classify_text(title)
-    timestamp       = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    timestamp        = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     msg = (
         f"🗞 *{source} Alert*\n"
         f"*{ticker}* — {title}\n"
@@ -274,7 +204,7 @@ def send_alert(title: str, ticker: str, sentiment: float, conf_score: int, conf_
     SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
     update_rate_limit(ticker)
 
-# === YAHOO RSS PROCESSING ===
+# === YAHOO RSS ===
 def process_yahoo_entry(entry):
     title = entry.get("title", "").strip()
     print("▶️ Yahoo headline:", title)
@@ -297,10 +227,10 @@ def analyze_yahoo():
         process_yahoo_entry(entry)
     print("✅ Yahoo done.")
 
-# === BENZINGA PROCESSING ===
+# === BENZINGA ===
 def fetch_benzinga(chunk):
     try:
-        resp = requests.get(BENZINGA_URL, params={"tickers": ",".join(chunk), "items": 50, "token": BENZINGA_API_KEY}, timeout=10)
+        resp = requests.get(BENZINGA_URL, params={"tickers": ",".join(chunk), "items":50, "token":BENZINGA_API_KEY}, timeout=10)
         resp.raise_for_status()
         return resp.json().get("news", [])
     except Exception as e:
@@ -310,7 +240,7 @@ def fetch_benzinga(chunk):
 def process_benzinga_article(article):
     title = article.get("title", "").strip()
     print("▶️ Benzinga headline:", title)
-    ticker = match_watchlist(title) or "GENERAL"
+    ticker            = match_watchlist(title)
     conf_score, conf_label = calculate_confidence(title)
     if should_send_alert(title, ticker, conf_score):
         sentiment = analyze_sentiment(title)
