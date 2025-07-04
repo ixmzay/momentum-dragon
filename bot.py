@@ -148,12 +148,14 @@ WATCHLIST = {
 
 # ─── OVERRIDES & KEYWORD LISTS ────────────────────────────────────────────────
 BULLISH_OVERRIDES = [
-    "dividend", "buyback", "upgrade", "beat estimates",
-    "surge", "outperform", "raise", "equity award", "award"
+    "dividend","buyback","upgrade","beat estimates",
+    "surge","outperform","raise","equity award","award",
+    # ◀─ newly added:
+    "rise","rises","jump","jumps","gain","gains"
 ]
 BEARISH_OVERRIDES = [
-    "downgrade", "miss estimates", "warning", "cut",
-    "plunge", "crash", "bankruptcy"
+    "downgrade","miss estimates","warning","cut",
+    "plunge","crash","bankruptcy"
 ]
 
 BASE_CRITICAL   = ["bankruptcy","insider trading","sec investigation","fda approval"]
@@ -260,7 +262,7 @@ def get_vix_level():
             return None,"⚠️ VIX data unavailable"
         val = h["Close"].iloc[-1]
         if val<14:    lbl="🟢 Low Fear"
-        elif val<20:  lbl="🟡 Normal"
+        elif val<20:  lbl="�acağız Normal"
         elif val<25:  lbl="🟠 Caution"
         elif val<30:  lbl="🔴 High Fear"
         else:         lbl="🚨 Panic"
@@ -310,15 +312,19 @@ def match_watchlist_alias(text: str)->str|None:
     return None
 
 def find_ticker_in_text(text: str)->str|None:
+    """
+    Only match explicit tickers:
+      1) $SYM
+      2) (SYM)
+    """
     up=text.upper()
+    # 1) $SYM
     m=re.search(r"\$([A-Z]{1,5})\b",up)
     if m and is_valid_ticker(m.group(1)):
         return m.group(1)
+    # 2) (SYM)
     m=re.search(r"\(([A-Z]{1,5})\)",up)
     if m and is_valid_ticker(m.group(1)):
-        return m.group(1)
-    m=TICKER_RE.search(up)
-    if m:
         return m.group(1)
     return None
 
@@ -336,7 +342,6 @@ def calculate_confidence(title:str)->(int,str):
 # ─── PERSISTENCE ───────────────────────────────────────────────────────────────
 def load_last_run()->float:
     return float(LAST_RUN_PATH.read_text()) if LAST_RUN_PATH.exists() else 0.0
-
 def save_last_run(ts:float):
     LAST_RUN_PATH.write_text(str(ts), encoding="utf-8")
 
@@ -352,7 +357,6 @@ def validate_full_article(url, title, ticker, msg_id, head_lbl, head_conf, head_
     full_lbl  = get_sentiment_label(summary)
     full_conf,_=calculate_confidence(summary)
     if full_lbl!=head_lbl or abs(full_sent-head_sent)>0.2:
-        print(f"   → [Stage2] {full_lbl} ({full_sent:.2f}), sending update")
         follow=(
             f"🔄 *Updated Sentiment* for `{ticker}`\n"
             f"*Headline:* {head_lbl} (`{head_sent:.2f}`)\n"
@@ -371,22 +375,17 @@ def process_yahoo_entry(entry):
 
     title=entry.get("title","").strip()
     url  =entry.get("link","")
-    print("▶️ Yahoo:",title)
     ticker=(
         match_watchlist_alias(title)
         or find_ticker_in_text(title)
         or ml_predict_ticker(title)
         or "GENERAL"
     )
-    print("   → ticker:",ticker)
-
-    # Stage1
     head_sent    = analyze_sentiment_net(title)
     head_lbl     = get_sentiment_label(title)
     head_conf, head_conf_lbl = calculate_confidence(title)
 
     if head_conf>=0.75 or head_lbl=="Neutral" or ticker!="GENERAL":
-        print("   → [Stage1] PASS, sending")
         msg_id=send_to_telegram(
             f"🗞 *Yahoo Alert*\n*{ticker}* — {title}\n"
             f"📈 Sentiment: *{head_lbl}* (`{head_sent:.2f}`)\n"
@@ -399,27 +398,21 @@ def process_yahoo_entry(entry):
                 args=(url,title,ticker,msg_id,head_lbl,head_conf,head_sent),
                 daemon=True
             ).start()
-    else:
-        print("   → [Stage1] filtered out")
 
 def process_benzinga_article(a):
     title=a.get("title","").strip()
     url  =a.get("url") or a.get("sourceUrl","")
-    print("▶️ Benzinga:",title)
     ticker=(
         match_watchlist_alias(title)
         or find_ticker_in_text(title)
         or ml_predict_ticker(title)
         or "GENERAL"
     )
-    print("   → ticker:",ticker)
-
     head_sent    = analyze_sentiment_net(title)
     head_lbl     = get_sentiment_label(title)
     head_conf, head_conf_lbl = calculate_confidence(title)
 
     if head_conf>=0.75 or head_lbl=="Neutral" or ticker!="GENERAL":
-        print("   → [Stage1] PASS, sending")
         msg_id=send_to_telegram(
             f"🗞 *Benzinga Alert*\n*{ticker}* — {title}\n"
             f"📈 Sentiment: *{head_lbl}* (`{head_sent:.2f}`)\n"
@@ -432,19 +425,15 @@ def process_benzinga_article(a):
                 args=(url,title,ticker,msg_id,head_lbl,head_conf,head_sent),
                 daemon=True
             ).start()
-    else:
-        print("   → [Stage1] filtered out")
 
-# ─── SCANNERS & FETCHERS ───────────────────────────────────────────────────────
+# ─── SCANNERS ─────────────────────────────────────────────────────────────────
 def analyze_yahoo():
     global last_run_ts
     last_run_ts=load_last_run()
-    print("📡 Scanning Yahoo RSS…")
     feed=feedparser.parse(RSS_URL)
     for e in feed.entries:
         process_yahoo_entry(e)
     save_last_run(last_run_ts)
-    print("✅ Yahoo done.")
 
 def fetch_benzinga(chunk):
     try:
@@ -455,44 +444,37 @@ def fetch_benzinga(chunk):
         )
         r.raise_for_status()
         return r.json().get("news",[])
-    except Exception as e:
-        print("❌ Benzinga error:",e)
+    except:
         return []
 
 def analyze_benzinga():
-    print("📡 Scanning Benzinga…")
     syms=list(WATCHLIST.keys())
     for i in range(0,len(syms),20):
         for art in fetch_benzinga(syms[i:i+20]):
             process_benzinga_article(art)
-    print("✅ Benzinga done.")
 
 def fetch_article_content(url:str)->str:
     try:
         r=requests.get(url,timeout=10)
         soup=BeautifulSoup(r.text,"html.parser")
         return " ".join(p.get_text() for p in soup.find_all("p"))
-    except Exception as e:
-        print("❌ Article fetch error:",e)
+    except:
         return ""
 
 # ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 if __name__=="__main__":
-    sent_news       = set(SENT_LOG_PATH.read_text().splitlines()) if SENT_LOG_PATH.exists() else set()
-    rate_limit_data = json.loads(RATE_LIMIT_LOG_PATH.read_text()) if RATE_LIMIT_LOG_PATH.exists() else {}
-    training_data   = json.loads(TRAINING_DATA_PATH.read_text()) if TRAINING_DATA_PATH.exists() else {"texts":[],"labels":[]}
-    last_run_ts     = load_last_run()
+    if SENT_LOG_PATH.exists():
+        sent_news=set(SENT_LOG_PATH.read_text().splitlines())
+    if RATE_LIMIT_LOG_PATH.exists():
+        rate_limit_data=json.loads(RATE_LIMIT_LOG_PATH.read_text())
+    if TRAINING_DATA_PATH.exists():
+        training_data=json.loads(TRAINING_DATA_PATH.read_text())
+    last_run_ts=load_last_run()
 
-    print("🚀 Starting market bot…")
     train_model()
     train_ticker_model()
 
     while True:
-        try:
-            analyze_yahoo()
-            analyze_benzinga()
-            print("⏲ Sleeping 60s…\n")
-            time.sleep(60)
-        except Exception as e:
-            print(f"💥 Main loop error: {e}")
-            time.sleep(10)
+        analyze_yahoo()
+        analyze_benzinga()
+        time.sleep(60)
