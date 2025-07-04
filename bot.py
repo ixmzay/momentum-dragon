@@ -189,12 +189,12 @@ def analyze_sentiment(text: str) -> float:
 
 def get_sentiment_label(score: float, text: str) -> str:
     txt = text.lower()
-    # 1) overrides
+    # overrides first
     if any(kw in txt for kw in BULLISH_OVERRIDES):
         return "Bullish"
     if any(kw in txt for kw in BEARISH_OVERRIDES):
         return "Bearish"
-    # 2) FinBERT thresholds
+    # then FinBERT threshold
     if score > 0.2:
         return "Bullish"
     if score < -0.2:
@@ -244,15 +244,20 @@ def update_rate_limit(ticker: str):
 TICKER_REGEX = re.compile(r'\$([A-Z]{1,5})\b')
 def match_watchlist(text: str) -> str:
     tl_upper = text.upper()
-    # 1) $TICKER mentions
+    # prefix “SYM — …”
+    if "—" in tl_upper:
+        prefix = tl_upper.split("—", 1)[0].strip()
+        if prefix in WATCHLIST:
+            return prefix
+    # $TICKER mentions
     for sym in TICKER_REGEX.findall(tl_upper):
         if sym in WATCHLIST:
             return sym
-    # 2) bare ALL-CAPS ticker
+    # bare ALL-CAPS ticker
     for ticker in WATCHLIST:
         if re.search(rf'\b{ticker}\b', tl_upper):
             return ticker
-    # 3) alias keywords
+    # alias keywords
     tl_lower = text.lower()
     for ticker, kws in WATCHLIST.items():
         for kw in kws:
@@ -310,18 +315,27 @@ def should_send_alert(title: str, ticker: str, conf_score: int, sentiment: float
 # === PROCESS & ALERT for Yahoo RSS ===
 def process_yahoo_entry(entry):
     title   = entry.get("title", "").strip()
-    summary = entry.get("summary", "") or entry.get("description", "")
-    text    = summary.strip() if summary.strip() else title
+    summary = ""
+    if hasattr(entry, "summary_detail"):
+        summary = entry.summary_detail.value
+    elif entry.get("summary"):
+        summary = entry["summary"]
+    text    = BeautifulSoup(summary, "html.parser").get_text().strip() or title
+
     print("▶️ Yahoo headline:", title)
-    ticker        = match_watchlist(title)
+    ticker          = match_watchlist(title)
     conf_score, conf_label = calculate_confidence(title)
-    sentiment     = analyze_sentiment(text)
+    sentiment       = analyze_sentiment(text)
     sentiment_label = get_sentiment_label(sentiment, text)
+
     print(f"   → ticker: {ticker} │ conf: {conf_score}% ({conf_label}) │ "
-          f"sentiment: {sentiment:.2f} ({sentiment_label})")
+          f"sent: {sentiment:.2f} ({sentiment_label})")
     if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → sending alert")
-        send_alert(title, ticker, sentiment, conf_score, conf_label, sentiment_label, "Yahoo")
+        send_alert(
+            title, ticker, sentiment,
+            conf_score, conf_label, sentiment_label, "Yahoo"
+        )
     else:
         print("   → filtered out")
 
@@ -337,7 +351,7 @@ def fetch_benzinga(chunk):
     try:
         resp = requests.get(
             BENZINGA_URL,
-            params={"tickers": ",".join(chunk), "items":50, "token":BENZINGA_API_KEY},
+            params={"tickers": ",".join(chunk), "items": 50, "token": BENZINGA_API_KEY},
             timeout=10
         )
         print("🔍 Benzinga HTTP:", resp.status_code)
@@ -351,16 +365,21 @@ def process_benzinga_article(article):
     title = article.get("title", "").strip()
     url   = article.get("url") or article.get("sourceUrl", "")
     print("▶️ Benzinga headline:", title)
-    ticker = match_watchlist(title)
+
+    ticker          = match_watchlist(title)
     conf_score, conf_label = calculate_confidence(title)
-    text    = fetch_article_content(url) if url else title
-    sentiment     = analyze_sentiment(text)
+    text            = fetch_article_content(url) if url else title
+    sentiment       = analyze_sentiment(text)
     sentiment_label = get_sentiment_label(sentiment, text)
+
     print(f"   → ticker: {ticker} │ conf: {conf_score}% ({conf_label}) │ "
-          f"sentiment: {sentiment:.2f} ({sentiment_label})")
+          f"sent: {sentiment:.2f} ({sentiment_label})")
     if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → sending alert")
-        send_alert(title, ticker, sentiment, conf_score, conf_label, sentiment_label, "Benzinga")
+        send_alert(
+            title, ticker, sentiment,
+            conf_score, conf_label, sentiment_label, "Benzinga"
+        )
     else:
         print("   → filtered out")
 
