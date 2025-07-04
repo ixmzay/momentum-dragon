@@ -28,13 +28,13 @@ except LookupError:
     nltk.download('wordnet')
 
 # === TELEGRAM CONFIG ===
-TELEGRAM_TOKEN     = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
-TELEGRAM_CHAT_ID   = "5528794335"
+TELEGRAM_TOKEN   = "YOUR_TELEGRAM_TOKEN"
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
 
 # === RSS & BENZINGA CONFIG ===
-RSS_URL            = "https://finance.yahoo.com/rss/topstories"
-BENZINGA_API_KEY   = "bz.XAO6BCTUMYPFGHXXL7SJ3ZU4IRRTFRE7"
-BENZINGA_URL       = "https://api.benzinga.com/api/v2/news"
+RSS_URL          = "https://finance.yahoo.com/rss/topstories"
+BENZINGA_API_KEY = "YOUR_BENZINGA_KEY"
+BENZINGA_URL     = "https://api.benzinga.com/api/v2/news"
 
 # === THRESHOLDS & LIMITS ===
 CONFIDENCE_THRESHOLD = 60    # keyword-based medium cutoff
@@ -42,73 +42,118 @@ NET_THRESHOLD        = 0.2   # FinBERT net-sentiment threshold for GENERAL
 RATE_LIMIT_SECONDS   = 1800  # 30-minute cooldown per ticker
 
 # === LOG FILE PATHS ===
-SENT_LOG_PATH        = Path("sent_titles.txt")
-RATE_LIMIT_LOG_PATH  = Path("rate_limit.json")
-TRAINING_DATA_PATH   = Path("training_data.json")
-LAST_RUN_PATH        = Path("last_run.json")
+SENT_LOG_PATH       = Path("sent_titles.txt")
+RATE_LIMIT_LOG_PATH = Path("rate_limit.json")
+TRAINING_DATA_PATH  = Path("training_data.json")
+LAST_RUN_PATH       = Path("last_run.json")
 
-# === GLOBAL STORAGE (loaded in __main__) ===
+# === GLOBAL STORAGE ===
 sent_news       = set()
 rate_limit_data = {}
 training_data   = {"texts": [], "labels": []}
 last_run_ts     = 0.0
 
-# === WATCHLIST (includes NKE) ===
+# === WATCHLIST (can be extended at will) ===
 WATCHLIST = {
-    "AAPL": ["AAPL","Apple"], "MSFT": ["MSFT","Microsoft"],
-    "GOOGL": ["GOOGL","Google","Alphabet"], "AMZN": ["AMZN","Amazon"],
-    "META": ["META","Facebook","Meta"], "TSLA": ["TSLA","Tesla"],
-    "NVDA": ["NVDA","NVIDIA"], "AMD": ["AMD","Advanced Micro Devices"],
-    "INTC": ["INTC","Intel"], "NFLX": ["NFLX","Netflix"],
-    "SPY": ["SPY","S&P 500"], "QQQ": ["QQQ","Nasdaq"],
-    "IWM": ["IWM","Russell 2000"], "XOM": ["XOM","Exxon","ExxonMobil"],
-    "CVX": ["CVX","Chevron"], "OXY": ["OXY","Occidental"],
-    "WMT": ["WMT","Walmart"], "COST": ["COST","Costco"],
-    "TGT": ["TGT","Target"], "HD": ["HD","Home Depot"],
-    "LOW": ["LOW","Lowe's"], "JPM": ["JPM","JPMorgan"],
-    "BAC": ["BAC","Bank of America"], "GS": ["GS","Goldman Sachs"],
-    "MS": ["MS","Morgan Stanley"], "WFC": ["WFC","Wells Fargo"],
-    "BX": ["BX","Blackstone"], "UBER": ["UBER"], "LYFT": ["LYFT"],
-    "SNOW": ["SNOW","Snowflake"], "PLTR": ["PLTR","Palantir"],
-    "CRM": ["CRM","Salesforce"], "ADBE": ["ADBE","Adobe"],
-    "SHOP": ["SHOP","Shopify"], "PYPL": ["PYPL","PayPal"],
-    "SQ": ["SQ","Block"], "COIN": ["COIN","Coinbase"], "ROKU": ["ROKU"],
-    "BABA": ["BABA","Alibaba"], "JD": ["JD","JD.com"], "NIO": ["NIO"],
-    "LI": ["LI","Li Auto"], "XPEV": ["XPEV","XPeng"],
-    "LMT": ["LMT","Lockheed Martin"], "NOC": ["NOC","Northrop Grumman"],
-    "RTX": ["RTX","Raytheon"], "BA": ["BA","Boeing"],
-    "GE": ["GE","General Electric"], "CAT": ["CAT","Caterpillar"],
-    "DE": ["DE","John Deere"], "F": ["F","Ford"],
-    "GM": ["GM","General Motors"], "RIVN": ["RIVN","Rivian"],
-    "LCID": ["LCID","Lucid"], "PFE": ["PFE","Pfizer"],
-    "MRNA": ["MRNA","Moderna"], "JNJ": ["JNJ","Johnson & Johnson"],
-    "BMY": ["BMY","Bristol Myers"], "UNH": ["UNH","UnitedHealth"],
-    "MDT": ["MDT","Medtronic"], "ABBV": ["ABBV","AbbVie"],
-    "TMO": ["TMO","Thermo Fisher"], "SHEL": ["SHEL","Shell"],
-    "BP": ["BP","British Petroleum"], "UL": ["UL","Unilever"],
-    "BTI": ["BTI","British American Tobacco"], "SAN": ["SAN","Santander"],
-    "DB": ["DB","Deutsche Bank"], "VTOL": ["VTOL","Bristow Group"],
-    "EVTL": ["EVTL","Vertical Aerospace"], "EH": ["EH","EHang"],
-    "PL": ["PL","Planet Labs"], "TT": ["TT","Trane"],
-    "JCI": ["JCI","Johnson Controls"], "RDW": ["RDW","Redwire"],
-    "LOAR": ["LOAR","Loar Holdings"], "PANW": ["PANW","Palo Alto Networks"],
-    "CRWD": ["CRWD","CrowdStrike"], "NET": ["NET","Cloudflare"],
-    "ZS": ["ZS","Zscaler"], "TSM": ["TSM","Taiwan Semiconductor"],
-    "AVGO": ["AVGO","Broadcom"], "MU": ["MU","Micron"],
-    "TXN": ["TXN","Texas Instruments"], "QCOM": ["QCOM","Qualcomm"],
-    "NKE": ["NKE","Nike"]
+    "AAPL": ["Apple"],
+    "MSFT": ["Microsoft"],
+    "GOOGL": ["Google", "Alphabet"],
+    "AMZN": ["Amazon"],
+    "META": ["Facebook", "Meta"],
+    "TSLA": ["Tesla"],
+    "NVDA": ["NVIDIA"],
+    "AMD": ["Advanced Micro Devices"],
+    "INTC": ["Intel"],
+    "NFLX": ["Netflix"],
+    "SPY": ["S&P 500"],
+    "QQQ": ["Nasdaq"],
+    "IWM": ["Russell 2000"],
+    "XOM": ["Exxon", "ExxonMobil"],
+    "CVX": ["Chevron"],
+    "OXY": ["Occidental"],
+    "WMT": ["Walmart"],
+    "COST": ["Costco"],
+    "TGT": ["Target"],
+    "HD": ["Home Depot"],
+    "LOW": ["Lowe's"],
+    "JPM": ["JPMorgan"],
+    "BAC": ["Bank of America"],
+    "GS": ["Goldman Sachs"],
+    "MS": ["Morgan Stanley"],
+    "WFC": ["Wells Fargo"],
+    "BX": ["Blackstone"],
+    "UBER": ["Uber"],
+    "LYFT": ["Lyft"],
+    "SNOW": ["Snowflake"],
+    "PLTR": ["Palantir"],
+    "CRM": ["Salesforce"],
+    "ADBE": ["Adobe"],
+    "SHOP": ["Shopify"],
+    "PYPL": ["PayPal"],
+    "SQ": ["Block"],
+    "COIN": ["Coinbase"],
+    "ROKU": ["Roku"],
+    "BABA": ["Alibaba"],
+    "JD": ["JD.com"],
+    "NIO": ["NIO"],
+    "LI": ["Li Auto"],
+    "XPEV": ["XPeng"],
+    "LMT": ["Lockheed Martin"],
+    "NOC": ["Northrop Grumman"],
+    "RTX": ["Raytheon"],
+    "BA": ["Boeing"],
+    "GE": ["General Electric"],
+    "CAT": ["Caterpillar"],
+    "DE": ["John Deere"],
+    "F": ["Ford"],
+    "GM": ["General Motors"],
+    "RIVN": ["Rivian"],
+    "LCID": ["Lucid"],
+    "PFE": ["Pfizer"],
+    "MRNA": ["Moderna"],
+    "JNJ": ["Johnson & Johnson"],
+    "BMY": ["Bristol Myers"],
+    "UNH": ["UnitedHealth"],
+    "MDT": ["Medtronic"],
+    "ABBV": ["AbbVie"],
+    "TMO": ["Thermo Fisher"],
+    "SHEL": ["Shell"],
+    "BP": ["British Petroleum"],
+    "UL": ["Unilever"],
+    "BTI": ["British American Tobacco"],
+    "SAN": ["Santander"],
+    "DB": ["Deutsche Bank"],
+    "VTOL": ["Bristow Group"],
+    "EVTL": ["Vertical Aerospace"],
+    "EH": ["EHang"],
+    "PL": ["Planet Labs"],
+    "TT": ["Trane"],
+    "JCI": ["Johnson Controls"],
+    "RDW": ["Redwire"],
+    "LOAR": ["Loar Holdings"],
+    "PANW": ["Palo Alto Networks"],
+    "CRWD": ["CrowdStrike"],
+    "NET": ["Cloudflare"],
+    "ZS": ["Zscaler"],
+    "TSM": ["Taiwan Semiconductor"],
+    "AVGO": ["Broadcom"],
+    "MU": ["Micron"],
+    "TXN": ["Texas Instruments"],
+    "QCOM": ["Qualcomm"],
+    "NKE": ["Nike"]
 }
 
 # === OVERRIDE LISTS ===
 BULLISH_OVERRIDES = [
     "dividend","buyback","upgrade","beat estimates","raise","surge",
     "outperform","jump","jumps","gain","gains","rise","rises","soar",
-    "soars","rally","rallies","higher"
+    "soars","rally","rallies","higher","merge","merges","merger",
+    "acquisition","rated buy","headed"
 ]
 BEARISH_OVERRIDES = [
     "downgrade","miss estimates","warning","cut","plunge","plunges",
     "crash","crashes","selloff","sell-off","fall","falls","decline",
-    "declines","drop","drops","slump","slumps"
+    "declines","drop","drops","slump","slumps","bankruptcy"
 ]
 
 # === BASE KEYWORDS & SYNONYMS ===
@@ -186,11 +231,11 @@ def analyze_sentiment_probs(text: str):
 
 def analyze_sentiment_net(text: str) -> float:
     probs = analyze_sentiment_probs(text)
-    return probs[2] - probs[0]  # pos - neg
+    return probs[2] - probs[0]
 
 def analyze_sentiment_argmax(text: str) -> str:
     probs = analyze_sentiment_probs(text)
-    return ["Bearish", "Neutral", "Bullish"][int(probs.argmax())]
+    return ["Bearish","Neutral","Bullish"][int(probs.argmax())]
 
 def get_sentiment_label(text: str) -> str:
     txt = text.strip().lower()
@@ -206,11 +251,16 @@ def get_vix_level():
     try:
         hist   = yf.Ticker("^VIX").history(period="1d", interval="1m")
         latest = hist["Close"].iloc[-1]
-        if latest < 14:     lbl = "🟢 Low Fear"
-        elif latest < 20:   lbl = "🟡 Normal"
-        elif latest < 25:   lbl = "🟠 Caution"
-        elif latest < 30:   lbl = "🔴 High Fear"
-        else:               lbl = "🚨 Panic"
+        if latest < 14:
+            lbl = "🟢 Low Fear"
+        elif latest < 20:
+            lbl = "🟡 Normal"
+        elif latest < 25:
+            lbl = "🟠 Caution"
+        elif latest < 30:
+            lbl = "🔴 High Fear"
+        else:
+            lbl = "🚨 Panic"
         return round(latest, 2), lbl
     except Exception as e:
         return None, f"❌ VIX error: {e}"
@@ -218,7 +268,11 @@ def get_vix_level():
 def send_to_telegram(message: str):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
     try:
-        r = requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", json=payload, timeout=10)
+        r = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json=payload,
+            timeout=10
+        )
         r.raise_for_status()
         print(f"✅ Telegram: {r.status_code}")
     except Exception as e:
@@ -244,16 +298,18 @@ def match_watchlist_alias(text: str) -> str | None:
 
 def find_ticker_in_text(text: str) -> str | None:
     up = text.upper()
-    for sym in re.findall(r'\$([A-Z]{1,5})\b', up):
-        if sym in WATCHLIST:
-            return sym
-    for g1, g2 in TICKER_REGEX.findall(up):
-        sym = g1 or g2
-        if sym in WATCHLIST:
-            return sym
-    for t in WATCHLIST:
-        if re.search(rf'\b{t}\b', up):
-            return t
+    # $SYM
+    m = re.search(r'\$([A-Z]{1,5})\b', up)
+    if m:
+        return m.group(1)
+    # (SYM)
+    m = re.search(r'\(([A-Z]{1,5})\)', up)
+    if m:
+        return m.group(1)
+    # bare ALL-CAPS words
+    for w in up.split():
+        if re.fullmatch(r'[A-Z]{1,5}', w):
+            return w
     return None
 
 def calculate_confidence(headline: str) -> (int, str):
@@ -277,10 +333,9 @@ def load_last_run() -> float:
     return 0.0
 
 def save_last_run(ts: float):
-    LAST_RUN_PATH.write_text(str(ts))
+    LAST_RUN_PATH.write_text(str(ts))#endregion
 
 def record_feedback(title: str, label: str):
-    # label should be "Bullish","Bearish","Neutral", etc.
     training_data.setdefault("texts", []).append(title)
     training_data.setdefault("labels", []).append(label)
     TRAINING_DATA_PATH.write_text(json.dumps(training_data), encoding="utf-8")
@@ -288,17 +343,20 @@ def record_feedback(title: str, label: str):
 def should_send_alert(title: str, ticker: str, conf: int, summary: str) -> bool:
     if title in sent_news or is_rate_limited(ticker):
         return False
-    if ticker != "GENERAL":
+    # always send if ticker identified
+    if ticker.upper() != "GENERAL":
         return True
     net = analyze_sentiment_net(summary)
     return conf >= CONFIDENCE_THRESHOLD or abs(net) >= NET_THRESHOLD
 
-def send_alert(title: str, ticker: str, summary: str, conf: int, conf_lbl: str, source: str):
-    net = analyze_sentiment_net(summary)
+def send_alert(title: str, ticker: str, summary: str,
+               conf: int, conf_lbl: str, source: str):
+    net     = analyze_sentiment_net(summary)
     sent_lbl = get_sentiment_label(summary)
     vix_val, vix_lbl = get_vix_level()
     ml_pred, ml_conf = classify_text(title)
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
     lines = [
         f"🗞 *{source} Alert*",
         f"*{ticker}* — {title}",
@@ -308,6 +366,7 @@ def send_alert(title: str, ticker: str, summary: str, conf: int, conf_lbl: str, 
     if ml_pred:
         lines.append(f"🤖 ML: *{ml_pred}* ({ml_conf}%)")
     lines.append(f"🌪 VIX: *{vix_val}* — {vix_lbl}  🕒 {ts}")
+
     send_to_telegram("\n".join(lines))
     sent_news.add(title)
     SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
@@ -324,30 +383,31 @@ def fetch_article_content(url: str) -> str:
 
 def process_yahoo_entry(entry):
     global last_run_ts
-    # skip old entries
+    # skip old items
     if hasattr(entry, "published_parsed"):
-        entry_ts = time.mktime(entry.published_parsed)
-        if entry_ts <= last_run_ts:
+        ts = time.mktime(entry.published_parsed)
+        if ts <= last_run_ts:
             return
-    title = entry.get("title", "").strip()
+        last_run_ts = max(last_run_ts, ts)
+
+    title   = entry.get("title", "").strip()
     summary = getattr(entry, "summary_detail", {}).get("value", "") or entry.get("summary", "")
-    text = BeautifulSoup(summary or title, "html.parser").get_text().strip()
+    text    = BeautifulSoup(summary or title, "html.parser").get_text().strip()
+
     print("▶️ Yahoo headline:", title)
     ticker = match_watchlist_alias(title) or find_ticker_in_text(title) or "GENERAL"
     print(f"   → ticker: {ticker}")
+
     conf, conf_lbl = calculate_confidence(title)
     if should_send_alert(title, ticker, conf, text):
         print("   → sending alert")
         send_alert(title, ticker, text, conf, conf_lbl, "Yahoo")
     else:
         print("   → filtered out")
-    # track max timestamp
-    if hasattr(entry, "published_parsed"):
-        last_run_ts = max(last_run_ts, entry_ts)
 
 def analyze_yahoo():
     global last_run_ts
-    last_run_ts_local = last_run_ts
+    last_run_ts = load_last_run()
     print("📡 Scanning Yahoo RSS...")
     feed = feedparser.parse(RSS_URL)
     for e in feed.entries:
@@ -359,9 +419,11 @@ def process_benzinga_article(a):
     title = a.get("title", "").strip()
     url   = a.get("url") or a.get("sourceUrl", "")
     text  = fetch_article_content(url) if url else title
+
     print("▶️ Benzinga headline:", title)
     ticker = match_watchlist_alias(title) or find_ticker_in_text(title) or "GENERAL"
     print(f"   → ticker: {ticker}")
+
     conf, conf_lbl = calculate_confidence(title)
     if should_send_alert(title, ticker, conf, text):
         print("   → sending alert")
@@ -391,14 +453,18 @@ def fetch_benzinga(chunk):
         return []
 
 if __name__ == "__main__":
-    sent_news       = set(SENT_LOG_PATH.read_text(encoding="utf-8").splitlines()) if SENT_LOG_PATH.exists() else set()
-    rate_limit_data = json.loads(RATE_LIMIT_LOG_PATH.read_text(encoding="utf-8")) if RATE_LIMIT_LOG_PATH.exists() else {}
-    training_data   = json.loads(TRAINING_DATA_PATH.read_text(encoding="utf-8")) if TRAINING_DATA_PATH.exists() else {"texts": [], "labels": []}
+    sent_news       = set(SENT_LOG_PATH.read_text(encoding="utf-8").splitlines()) \
+                        if SENT_LOG_PATH.exists() else set()
+    rate_limit_data = json.loads(RATE_LIMIT_LOG_PATH.read_text(encoding="utf-8")) \
+                        if RATE_LIMIT_LOG_PATH.exists() else {}
+    training_data   = json.loads(TRAINING_DATA_PATH.read_text(encoding="utf-8")) \
+                        if TRAINING_DATA_PATH.exists() else {"texts": [], "labels": []}
     last_run_ts     = load_last_run()
 
     print("🚀 Starting market bot...")
     suggest_confidence_threshold(0.75)
     train_model()
+
     while True:
         try:
             analyze_yahoo()
