@@ -1,9 +1,10 @@
+```python
 import time
 import re
 import json
 import threading
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import requests
 import feedparser
@@ -31,13 +32,13 @@ except LookupError:
     nltk.download('wordnet')
 
 # === TELEGRAM CONFIG ===
-TELEGRAM_TOKEN     = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
-TELEGRAM_CHAT_ID   = "5528794335"
+TELEGRAM_TOKEN   = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
+TELEGRAM_CHAT_ID = "5528794335"
 
 # === RSS & BENZINGA CONFIG ===
-RSS_URL            = "https://finance.yahoo.com/rss/topstories"
-BENZINGA_API_KEY   = "bz.XAO6BCTUMYPFGHXXL7SJ3ZU4IRRTFRE7"
-BENZINGA_URL       = "https://api.benzinga.com/api/v2/news"
+RSS_URL          = "https://finance.yahoo.com/rss/topstories"
+BENZINGA_API_KEY = "bz.XAO6BCTUMYPFGHXXL7SJ3ZU4IRRTFRE7"
+BENZINGA_URL     = "https://api.benzinga.com/api/v2/news"
 
 # === THRESHOLDS & LIMITS ===
 CONFIDENCE_THRESHOLD = 60    # keyword-based medium cutoff
@@ -56,52 +57,54 @@ training_data   = {"texts": [], "labels": []}
 
 # === WATCHLIST ===
 WATCHLIST = {
-    "AAPL": ["AAPL", "Apple"], "MSFT": ["MSFT", "Microsoft"],
-    "GOOGL": ["GOOGL", "Google", "Alphabet"], "AMZN": ["AMZN", "Amazon"],
-    "META": ["META", "Facebook", "Meta"], "TSLA": ["TSLA", "Tesla"],
-    "NVDA": ["NVDA", "NVIDIA"], "AMD": ["AMD", "Advanced Micro Devices"],
-    "INTC": ["INTC", "Intel"], "NFLX": ["NFLX", "Netflix"],
-    "SPY": ["SPY", "S&P 500"], "QQQ": ["QQQ", "Nasdaq"],
-    "IWM": ["IWM", "Russell 2000"], "XOM": ["XOM", "Exxon", "ExxonMobil"],
-    "CVX": ["CVX", "Chevron"], "OXY": ["OXY", "Occidental"],
-    "WMT": ["WMT", "Walmart"], "COST": ["COST", "Costco"],
-    "TGT": ["TGT", "Target"], "HD": ["HD", "Home Depot"],
-    "LOW": ["LOW", "Lowe's"], "JPM": ["JPM", "JPMorgan"],
-    "BAC": ["BAC", "Bank of America"], "GS": ["GS", "Goldman Sachs"],
-    "MS": ["MS", "Morgan Stanley"], "WFC": ["WFC", "Wells Fargo"],
-    "BX": ["BX", "Blackstone"], "UBER": ["UBER"], "LYFT": ["LYFT"],
+    "AAPL": ["AAPL", "Apple"],   "MSFT": ["MSFT", "Microsoft"],
+    "GOOGL": ["GOOGL", "Google", "Alphabet"],  "AMZN": ["AMZN", "Amazon"],
+    "META": ["META", "Facebook", "Meta"],      "TSLA": ["TSLA", "Tesla"],
+    "NVDA": ["NVDA", "NVIDIA"],    "AMD": ["AMD", "Advanced Micro Devices"],
+    "INTC": ["INTC", "Intel"],     "NFLX": ["NFLX", "Netflix"],
+    "SPY": ["SPY", "S&P 500"],     "QQQ": ["QQQ", "Nasdaq"],
+    "IWM": ["IWM", "Russell 2000"],"XOM": ["XOM", "Exxon", "ExxonMobil"],
+    "CVX": ["CVX", "Chevron"],     "OXY": ["OXY", "Occidental"],
+    "WMT": ["WMT", "Walmart"],     "COST": ["COST", "Costco"],
+    "TGT": ["TGT", "Target"],      "HD": ["HD", "Home Depot"],
+    "LOW": ["LOW", "Lowe's"],      "JPM": ["JPM", "JPMorgan"],
+    "BAC": ["BAC", "Bank of America"],           "GS": ["GS", "Goldman Sachs"],
+    "MS": ["MS", "Morgan Stanley"],              "WFC": ["WFC", "Wells Fargo"],
+    "BX": ["BX", "Blackstone"],  "UBER": ["UBER"], "LYFT": ["LYFT"],
     "SNOW": ["SNOW", "Snowflake"], "PLTR": ["PLTR", "Palantir"],
     "CRM": ["CRM", "Salesforce"], "ADBE": ["ADBE", "Adobe"],
-    "SHOP": ["SHOP", "Shopify"], "PYPL": ["PYPL", "PayPal"],
-    "SQ": ["SQ", "Block"], "COIN": ["COIN", "Coinbase"], "ROKU": ["ROKU"],
-    "BABA": ["BABA", "Alibaba"], "JD": ["JD", "JD.com"], "NIO": ["NIO"],
-    "LI": ["LI", "Li Auto"], "XPEV": ["XPEV", "XPeng"],
-    "LMT": ["LMT", "Lockheed Martin"], "NOC": ["NOC", "Northrop Grumman"],
-    "RTX": ["RTX", "Raytheon"], "BA": ["BA", "Boeing"],
-    "GE": ["GE", "General Electric"], "CAT": ["CAT", "Caterpillar"],
-    "DE": ["DE", "John Deere"], "F": ["F", "Ford"],
-    "GM": ["GM", "General Motors"], "RIVN": ["RIVN", "Rivian"],
-    "LCID": ["LCID", "Lucid"], "PFE": ["PFE", "Pfizer"],
-    "MRNA": ["MRNA", "Moderna"], "JNJ": ["JNJ", "Johnson & Johnson"],
-    "BMY": ["BMY", "Bristol Myers"], "UNH": ["UNH", "UnitedHealth"],
-    "MDT": ["MDT", "Medtronic"], "ABBV": ["ABBV", "AbbVie"],
-    "TMO": ["TMO", "Thermo Fisher"], "SHEL": ["SHEL", "Shell"],
-    "BP": ["BP", "British Petroleum"], "UL": ["UL", "Unilever"],
-    "BTI": ["BTI", "British American Tobacco"], "SAN": ["SAN", "Santander"],
-    "DB": ["DB", "Deutsche Bank"], "VTOL": ["VTOL", "Bristow Group"],
-    "EVTL": ["EVTL", "Vertical Aerospace"], "EH": ["EH", "EHang"],
-    "PL": ["PL", "Planet Labs"], "TT": ["TT", "Trane"],
-    "JCI": ["JCI", "Johnson Controls"], "RDW": ["RDW", "Redwire"],
-    "LOAR": ["LOAR", "Loar Holdings"],
-    "PANW": ["PANW", "Palo Alto Networks"], "CRWD": ["CRWD", "CrowdStrike"],
-    "NET": ["NET", "Cloudflare"], "ZS": ["ZS", "Zscaler"],
-    "TSM": ["TSM", "Taiwan Semiconductor"], "AVGO": ["AVGO", "Broadcom"],
-    "MU": ["MU", "Micron"], "TXN": ["TXN", "Texas Instruments"],
-    "QCOM": ["QCOM", "Qualcomm"]
+    "SHOP": ["SHOP", "Shopify"],   "PYPL": ["PYPL", "PayPal"],
+    "SQ": ["SQ", "Block"],         "COIN": ["COIN", "Coinbase"],
+    "ROKU": ["ROKU"],              "BABA": ["BABA", "Alibaba"],
+    "JD": ["JD", "JD.com"],        "NIO": ["NIO"],   "LI": ["LI", "Li Auto"],
+    "XPEV": ["XPEV", "XPeng"],     "LMT": ["LMT", "Lockheed Martin"],
+    "NOC": ["NOC", "Northrop Grumman"],           "RTX": ["RTX", "Raytheon"],
+    "BA": ["BA", "Boeing"],        "GE": ["GE", "General Electric"],
+    "CAT": ["CAT", "Caterpillar"], "DE": ["DE", "John Deere"],
+    "F": ["F", "Ford"],            "GM": ["GM", "General Motors"],
+    "RIVN": ["RIVN", "Rivian"],    "LCID": ["LCID", "Lucid"],
+    "PFE": ["PFE", "Pfizer"],      "MRNA": ["MRNA", "Moderna"],
+    "JNJ": ["JNJ", "Johnson & Johnson"],          "BMY": ["BMY", "Bristol Myers"],
+    "UNH": ["UNH", "UnitedHealth"],                "MDT": ["MDT", "Medtronic"],
+    "ABBV": ["ABBV", "AbbVie"],    "TMO": ["TMO", "Thermo Fisher"],
+    "SHEL": ["SHEL", "Shell"],     "BP": ["BP", "British Petroleum"],
+    "UL": ["UL", "Unilever"],      "BTI": ["BTI", "British American Tobacco"],
+    "SAN": ["SAN", "Santander"],   "DB": ["DB", "Deutsche Bank"],
+    "VTOL": ["VTOL", "Bristow Group"], "EVTL": ["EVTL", "Vertical Aerospace"],
+    "EH": ["EH", "EHang"],          "PL": ["PL", "Planet Labs"],
+    "TT": ["TT", "Trane"],          "JCI": ["JCI", "Johnson Controls"],
+    "RDW": ["RDW", "Redwire"],      "LOAR": ["LOAR", "Loar Holdings"],
+    "PANW": ["PANW", "Palo Alto Networks"],       "CRWD": ["CRWD", "CrowdStrike"],
+    "NET": ["NET", "Cloudflare"],   "ZS": ["ZS", "Zscaler"],
+    "TSM": ["TSM", "Taiwan Semiconductor"],       "AVGO": ["AVGO", "Broadcom"],
+    "MU": ["MU", "Micron"],         "TXN": ["TXN", "Texas Instruments"],
+    "QCOM": ["QCOM", "Qualcomm"],
+    "NKE": ["NKE", "Nike"]  # added Nike explicitly
 }
 
 # === OVERRIDE LISTS ===
 BULLISH_OVERRIDES = [
+    "buy", "should buy",
     "dividend", "buyback", "upgrade", "beat estimates", "raise",
     "surge", "outperform", "jump", "jumps", "gain", "gains",
     "rise", "rises", "soar", "soars", "rally", "rallies", "higher"
@@ -174,7 +177,7 @@ def suggest_confidence_threshold(pct: float = 0.75):
     scores.sort()
     idx = int(len(scores) * pct)
     suggestion = scores[min(idx, len(scores) - 1)]
-    print(f"💡 Based on your data, {int(pct*100)}th percentile keyword score is {suggestion}. "
+    print(f"💡 {int(pct*100)}th percentile keyword score is {suggestion}. "
           f"Consider CONFIDENCE_THRESHOLD = {suggestion}")
 
 # === FINBERT SETUP ===
@@ -188,13 +191,16 @@ def analyze_sentiment(text: str) -> float:
     return probs[2] - probs[0]
 
 def get_sentiment_label(score: float, text: str) -> str:
-    txt = text.lower()
-    # overrides first
+    txt = text.strip().lower()
+    # 0) questions → always Neutral
+    if txt.endswith("?"):
+        return "Neutral"
+    # 1) overrides
     if any(kw in txt for kw in BULLISH_OVERRIDES):
         return "Bullish"
     if any(kw in txt for kw in BEARISH_OVERRIDES):
         return "Bearish"
-    # then FinBERT threshold
+    # 2) FinBERT thresholds
     if score > 0.2:
         return "Bullish"
     if score < -0.2:
@@ -241,27 +247,32 @@ def update_rate_limit(ticker: str):
     RATE_LIMIT_LOG_PATH.write_text(json.dumps(rate_limit_data), encoding="utf-8")
 
 # === ADVANCED TICKER FINDER ===
-TICKER_REGEX = re.compile(r'\$([A-Z]{1,5})\b')
+TICKER_REGEX = re.compile(r'\$([A-Z]{1,5})\b|\(([A-Z]{1,5})\)')
 def match_watchlist(text: str) -> str:
-    tl_upper = text.upper()
+    tl_up = text.upper()
     # prefix “SYM — …”
-    if "—" in tl_upper:
-        prefix = tl_upper.split("—", 1)[0].strip()
+    if "—" in tl_up:
+        prefix = tl_up.split("—", 1)[0].strip()
         if prefix in WATCHLIST:
             return prefix
+    # parentheses “(SYM)”
+    for g1, g2 in TICKER_REGEX.findall(tl_up):
+        sym = g1 or g2
+        if sym in WATCHLIST:
+            return sym
     # $TICKER mentions
-    for sym in TICKER_REGEX.findall(tl_upper):
+    for sym in re.findall(r'\$([A-Z]{1,5})\b', tl_up):
         if sym in WATCHLIST:
             return sym
     # bare ALL-CAPS ticker
     for ticker in WATCHLIST:
-        if re.search(rf'\b{ticker}\b', tl_upper):
+        if re.search(rf'\b{ticker}\b', tl_up):
             return ticker
     # alias keywords
-    tl_lower = text.lower()
+    tl_lo = text.lower()
     for ticker, kws in WATCHLIST.items():
         for kw in kws:
-            if kw.lower() in tl_lower:
+            if kw.lower() in tl_lo:
                 return ticker
     return "GENERAL"
 
@@ -301,13 +312,13 @@ def send_alert(
 
     msg = "\n".join(lines)
     send_to_telegram(msg)
-
     sent_news.add(title)
     SENT_LOG_PATH.write_text("\n".join(sent_news), encoding="utf-8")
     update_rate_limit(ticker)
 
 # === ALERT RULE ===
-def should_send_alert(title: str, ticker: str, conf_score: int, sentiment: float) -> bool:
+def should_send_alert(title: str, ticker: str,
+                      conf_score: int, sentiment: float) -> bool:
     if title in sent_news or is_rate_limited(ticker):
         return False
     return (conf_score >= CONFIDENCE_THRESHOLD or abs(sentiment) >= FINBERT_THRESHOLD)
@@ -320,22 +331,19 @@ def process_yahoo_entry(entry):
         summary = entry.summary_detail.value
     elif entry.get("summary"):
         summary = entry["summary"]
-    text    = BeautifulSoup(summary, "html.parser").get_text().strip() or title
+    text = BeautifulSoup(summary, "html.parser").get_text().strip() or title
 
     print("▶️ Yahoo headline:", title)
     ticker          = match_watchlist(title)
     conf_score, conf_label = calculate_confidence(title)
     sentiment       = analyze_sentiment(text)
     sentiment_label = get_sentiment_label(sentiment, text)
-
     print(f"   → ticker: {ticker} │ conf: {conf_score}% ({conf_label}) │ "
           f"sent: {sentiment:.2f} ({sentiment_label})")
     if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → sending alert")
-        send_alert(
-            title, ticker, sentiment,
-            conf_score, conf_label, sentiment_label, "Yahoo"
-        )
+        send_alert(title, ticker, sentiment,
+                   conf_score, conf_label, sentiment_label, "Yahoo")
     else:
         print("   → filtered out")
 
@@ -364,22 +372,19 @@ def fetch_benzinga(chunk):
 def process_benzinga_article(article):
     title = article.get("title", "").strip()
     url   = article.get("url") or article.get("sourceUrl", "")
-    print("▶️ Benzinga headline:", title)
+    text  = fetch_article_content(url) if url else title
 
+    print("▶️ Benzinga headline:", title)
     ticker          = match_watchlist(title)
     conf_score, conf_label = calculate_confidence(title)
-    text            = fetch_article_content(url) if url else title
     sentiment       = analyze_sentiment(text)
     sentiment_label = get_sentiment_label(sentiment, text)
-
     print(f"   → ticker: {ticker} │ conf: {conf_score}% ({conf_label}) │ "
           f"sent: {sentiment:.2f} ({sentiment_label})")
     if should_send_alert(title, ticker, conf_score, sentiment):
         print("   → sending alert")
-        send_alert(
-            title, ticker, sentiment,
-            conf_score, conf_label, sentiment_label, "Benzinga"
-        )
+        send_alert(title, ticker, sentiment,
+                   conf_score, conf_label, sentiment_label, "Benzinga")
     else:
         print("   → filtered out")
 
@@ -392,14 +397,24 @@ def analyze_benzinga():
             process_benzinga_article(art)
     print("✅ Benzinga done.")
 
+# === ARTICLE FETCH (for Benzinga fallback) ===
+def fetch_article_content(url: str) -> str:
+    try:
+        resp = requests.get(url, timeout=10)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        return " ".join(p.get_text() for p in soup.find_all("p"))
+    except Exception as e:
+        print(f"❌ Article fetch error: {e}")
+        return ""
+
 # === MAIN LOOP ===
 if __name__ == "__main__":
     sent_news       = set(SENT_LOG_PATH.read_text(encoding="utf-8").splitlines()) \
-                      if SENT_LOG_PATH.exists() else set()
+                        if SENT_LOG_PATH.exists() else set()
     rate_limit_data = json.loads(RATE_LIMIT_LOG_PATH.read_text(encoding="utf-8")) \
-                      if RATE_LIMIT_LOG_PATH.exists() else {}
+                        if RATE_LIMIT_LOG_PATH.exists() else {}
     training_data   = json.loads(TRAINING_DATA_PATH.read_text(encoding="utf-8")) \
-                      if TRAINING_DATA_PATH.exists() else {"texts": [], "labels": []}
+                        if TRAINING_DATA_PATH.exists() else {"texts": [], "labels": []}
 
     print("🚀 Starting market bot...")
     suggest_confidence_threshold(0.75)
@@ -413,3 +428,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"💥 Main loop error: {e}")
             time.sleep(10)
+```
