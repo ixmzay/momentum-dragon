@@ -28,12 +28,12 @@ except LookupError:
     nltk.download('wordnet')
 
 # === TELEGRAM CONFIG ===
-TELEGRAM_TOKEN   = "YOUR_TELEGRAM_TOKEN"
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+TELEGRAM_TOKEN   = "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M"
+TELEGRAM_CHAT_ID = "5528794335"
 
 # === RSS & BENZINGA CONFIG ===
 RSS_URL          = "https://finance.yahoo.com/rss/topstories"
-BENZINGA_API_KEY = "YOUR_BENZINGA_KEY"
+BENZINGA_API_KEY = "bz.XAO6BCTUMYPFGHXXL7SJ3ZU4IRRTFRE7"
 BENZINGA_URL     = "https://api.benzinga.com/api/v2/news"
 
 # === THRESHOLDS & LIMITS ===
