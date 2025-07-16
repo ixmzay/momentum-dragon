@@ -6,7 +6,6 @@ transformers
 torch
 scikit-learn
 pandas
-BeautifulSoup
 requests
 feedparser
 yfinance
