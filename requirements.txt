@@ -1,11 +1,3 @@
-yfinance
-feedparser
-requests
-textblob
-transformers
-torch
-scikit-learn
-pandas
 requests
 feedparser
 yfinance
