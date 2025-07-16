@@ -6,3 +6,11 @@ transformers
 torch
 scikit-learn
 pandas
+BeautifulSoup
+requests
+feedparser
+yfinance
+beautifulsoup4
+icalendar
+pytz
+pandas
