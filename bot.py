@@ -16,7 +16,7 @@ import pandas as pd
 
 # === TELEGRAM CONFIG ===
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "7623921356:AAGTIO3DP-bdUFj_6ODh4Z2mDLHdHxebw3M")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "5528794335")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1002580715831")
 
 # === RSS & BENZINGA CONFIG ===
 RSS_URL          = "https://finance.yahoo.com/rss/topstories"
